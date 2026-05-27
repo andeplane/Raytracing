@@ -108,7 +108,7 @@ const SPHERE_SHADER = `// ══════════════════
 //  Object — Sphere (radius R, centred at origin)
 // ══════════════════════════════════════════════════════
 
-const float R = 1.5;   // sphere radius
+const float R = 0.375;   // sphere radius
 
 // F(p) = 0 on the sphere surface, < 0 inside, > 0 outside.
 float ObjectImplicit(vec3 p) {
