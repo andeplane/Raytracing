@@ -36,6 +36,10 @@ scene3d.onGizmoChange(() => updateAll())
 const polyGraph = new PolynomialGraph(graphCanvas)
 const nearView  = new NearPlaneView(nearPlaneCanvas)
 
+// ── Lazy-init tab views (declared here so applyGeometryMode can reference them) ──
+let codeView:   CodeView   | null = null
+let theoryView: TheoryView | null = null
+
 // ── Geometry metadata ──────────────────────────────────────────────────────
 const GEOMETRY_META: Record<GeometryMode, {
   title: string; graphLabel: string; subtitle: string; majorLabel: string; showMinorR: boolean
@@ -167,9 +171,6 @@ resizeObs.observe(nearPlaneCanvas)
 applyGeometryMode()
 
 // ── Tab navigation ─────────────────────────────────────────────────────────
-let codeView:   CodeView   | null = null
-let theoryView: TheoryView | null = null
-
 function setActiveTab(target: string) {
   // Hide all panels, deselect all buttons
   document.querySelectorAll<HTMLElement>('.tab-panel').forEach(p => { p.hidden = true })
