@@ -383,6 +383,7 @@ export class CodeView {
   private canvas:          HTMLCanvasElement;
   private textarea:        HTMLTextAreaElement;
   private highlight:       HTMLPreElement;
+  private lineNumbers:     HTMLDivElement;
   private errorOverlay:    HTMLDivElement;
   private editorWrap:      HTMLDivElement;
   private gl:              WebGL2RenderingContext;
@@ -413,6 +414,7 @@ export class CodeView {
           <span id="glsl-saved-indicator" class="glsl-saved-indicator" aria-live="polite"></span>
         </div>
         <div id="glsl-editor-container">
+          <div id="glsl-line-numbers" aria-hidden="true"></div>
           <pre  id="glsl-highlight" aria-hidden="true"></pre>
           <textarea id="glsl-editor"
             spellcheck="false" autocomplete="off"
@@ -422,11 +424,12 @@ export class CodeView {
       </div>
     `;
 
-    this.canvas       = container.querySelector('#glsl-canvas')!    as HTMLCanvasElement;
-    this.textarea     = container.querySelector('#glsl-editor')!    as HTMLTextAreaElement;
-    this.highlight    = container.querySelector('#glsl-highlight')!  as HTMLPreElement;
-    this.errorOverlay = container.querySelector('#error-overlay')!  as HTMLDivElement;
-    this.editorWrap   = container.querySelector('#glsl-editor-wrap')! as HTMLDivElement;
+    this.canvas       = container.querySelector('#glsl-canvas')!      as HTMLCanvasElement;
+    this.textarea     = container.querySelector('#glsl-editor')!      as HTMLTextAreaElement;
+    this.highlight    = container.querySelector('#glsl-highlight')!    as HTMLPreElement;
+    this.lineNumbers  = container.querySelector('#glsl-line-numbers')! as HTMLDivElement;
+    this.errorOverlay = container.querySelector('#error-overlay')!     as HTMLDivElement;
+    this.editorWrap   = container.querySelector('#glsl-editor-wrap')!  as HTMLDivElement;
 
     // ── Resize handle ────────────────────────────────────────────────────
     const handle = container.querySelector('#glsl-resize-handle')! as HTMLDivElement;
@@ -468,10 +471,11 @@ export class CodeView {
       flashSaved();
     });
 
-    // Keep pre scrolled in sync with textarea
+    // Keep pre + line numbers scrolled in sync with textarea
     this.textarea.addEventListener('scroll', () => {
-      this.highlight.scrollTop  = this.textarea.scrollTop;
-      this.highlight.scrollLeft = this.textarea.scrollLeft;
+      this.highlight.scrollTop   = this.textarea.scrollTop;
+      this.highlight.scrollLeft  = this.textarea.scrollLeft;
+      this.lineNumbers.scrollTop = this.textarea.scrollTop;
     });
 
     // ── WebGL2 ───────────────────────────────────────────────────────────
@@ -556,6 +560,16 @@ export class CodeView {
 
   private syncHighlight(): void {
     this.highlight.innerHTML = highlightGLSL(this.textarea.value);
+    this.syncLineNumbers();
+  }
+
+  private syncLineNumbers(): void {
+    const lineCount = (this.textarea.value.match(/\n/g) ?? []).length + 1;
+    // Only rebuild DOM when the count changes (cheap fast-path on normal edits)
+    if (this.lineNumbers.childElementCount === lineCount) return;
+    let html = '';
+    for (let i = 1; i <= lineCount; i++) html += `<div>${i}</div>`;
+    this.lineNumbers.innerHTML = html;
   }
 
   // ── Shader compilation ─────────────────────────────────────────────────
