@@ -71,6 +71,7 @@ function applyGeometryMode() {
   document.getElementById('graph-subtitle')!.textContent = meta.subtitle
   document.getElementById('label-majorR')!.textContent = meta.majorLabel
   document.getElementById('ctrl-row-minorR')!.style.display = meta.showMinorR ? '' : 'none'
+  theoryView?.setGeometry(params.geometryMode)
   updateAll()
 }
 
@@ -169,12 +170,8 @@ applyGeometryMode()
 let codeView:   CodeView   | null = null
 let theoryView: TheoryView | null = null
 
-// Elements only relevant when the Intuition or Code tab is active
-const headerOnlyForInteractive = [
-  document.getElementById('scene-title')!,
-  document.getElementById('geometry-select')!,
-  document.getElementById('root-info')!,
-]
+// root-info (hit count) is only meaningful on the Intuition tab
+const rootInfoEl = document.getElementById('root-info')!
 
 function setActiveTab(target: string) {
   // Hide all panels, deselect all buttons
@@ -189,15 +186,13 @@ function setActiveTab(target: string) {
   document.querySelector<HTMLButtonElement>(`.tab-btn[data-tab="${target}"]`)!
     .setAttribute('aria-selected', 'true')
 
-  // Hide Intuition-only header items on Theory tab
-  const isTheory = target === 'theory'
-  for (const el of headerOnlyForInteractive) {
-    el.style.visibility = isTheory ? 'hidden' : ''
-  }
+  // root-info is only relevant on the Intuition tab
+  rootInfoEl.style.visibility = target === 'intuition' ? '' : 'hidden'
 
   // Lazy-init tabs on first visit
   if (target === 'theory' && !theoryView) {
     theoryView = new TheoryView(document.getElementById('tab-theory')!)
+    theoryView.setGeometry(params.geometryMode)
   }
   if (target === 'code' && !codeView) {
     codeView = new CodeView(document.getElementById('code-view-root')!)

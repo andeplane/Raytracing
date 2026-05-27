@@ -418,4 +418,12 @@ export class TheoryView {
       populate: populateTorus,
     })
   }
+
+  /** Show only the setup section + the section for the active geometry. */
+  setGeometry(mode: GeometryMode) {
+    const sections = document.querySelectorAll<HTMLElement>('#theory-scroll .theory-section[data-geometry]')
+    for (const sec of sections) {
+      sec.hidden = sec.dataset.geometry !== mode
+    }
+  }
 }
