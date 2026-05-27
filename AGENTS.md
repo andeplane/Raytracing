@@ -1,11 +1,30 @@
 # Agent Guidelines — Ray–Torus Intersection Visualiser
 
-## Project overview
+## Purpose
 
-A Three.js + TypeScript (Vite) educational tool for visualising ray–torus
-intersection. A ray is fired from an eye point through a near plane into a
-scene containing a torus. The quartic polynomial whose roots give the
-intersection parameters is plotted in real time.
+This is an **interactive learning tool** for building intuition about ray–surface
+intersection, specifically the step that sits at the heart of every ray tracer:
+*"does this ray hit this object, and if so, where?"*
+
+The torus is chosen because it produces the most interesting case in analytic
+ray tracing — a **degree-4 (quartic) polynomial** in the ray parameter `t`. Most
+surfaces give degree 1 (planes) or degree 2 (spheres, cylinders). The quartic
+means a ray can intersect a torus at up to **4 points**, and the polynomial can
+have 0, 2, or 4 real roots depending on the ray's path. That richness makes
+the torus ideal for teaching.
+
+### What the user sees and why each element exists
+
+| Element | Why it's there |
+|---|---|
+| **3D scene** — torus, eye sphere, near plane, ray | Shows the geometry: where the eye is, what the near plane looks like, and exactly where the ray travels |
+| **Near-plane picker** — click/drag the 2D canvas | Mimics how a real renderer picks a ray per pixel; X/Y on the near plane map directly to ray direction |
+| **Ray colour** (green = hit, red = miss) | Immediate visual feedback so you can sweep the ray and see the hit/miss boundary |
+| **Teal hit spheres** in 3D | Show the exact world-space positions corresponding to the polynomial roots |
+| **Quartic graph** `f(t)` | The core insight: roots of the polynomial = intersections. You can see how the curve shape changes as you tilt the torus or move the ray, and why grazing rays produce near-tangent roots close together |
+| **True min/max labels on y-axis** | The polynomial values span many orders of magnitude; anchoring the axis to the actual extremes prevents the curve from looking flat or clipped |
+| **Local extrema (◇ markers)** | Where `f′(t) = 0` — points where the ray is tangent to the torus surface; two roots merging into one here means a grazing hit |
+| **Torus tilt slider** | Rotating the torus around X changes all four roots simultaneously; watching the graph while tilting shows how symmetry breaks |
 
 ---
 
