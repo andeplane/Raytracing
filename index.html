@@ -293,14 +293,28 @@
         flex-shrink: 0;
         background: #0d0d1a;
       }
-      #glsl-run-btn {
+      #glsl-run-btn, #glsl-reset-btn {
         padding: 3px 14px;
-        background: #0d1f0d; color: #4ecca3;
-        border: 1px solid #2a5a2a; border-radius: 3px;
+        border-radius: 3px;
         cursor: pointer; font: 11px/1.6 'Courier New', monospace;
         transition: background 0.15s, border-color 0.15s;
       }
+      #glsl-run-btn {
+        background: #0d1f0d; color: #4ecca3;
+        border: 1px solid #2a5a2a;
+      }
       #glsl-run-btn:hover { background: #122212; border-color: #4ecca3; }
+      #glsl-reset-btn {
+        background: #1a1010; color: #cc7766;
+        border: 1px solid #4a2a2a;
+      }
+      #glsl-reset-btn:hover { background: #221212; border-color: #cc7766; }
+      .glsl-saved-indicator {
+        font: 10px/1 'Courier New', monospace;
+        color: #2a6a4a;
+        letter-spacing: 0.5px;
+        transition: opacity 0.4s;
+      }
       .glsl-toolbar-label {
         font: 10px/1 'Courier New', monospace;
         letter-spacing: 1px; text-transform: uppercase; color: #333;

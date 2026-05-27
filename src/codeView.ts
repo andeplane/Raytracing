@@ -108,7 +108,7 @@ const SPHERE_SHADER = `// ══════════════════
 //  Object — Sphere (radius R, centred at origin)
 // ══════════════════════════════════════════════════════
 
-const float R = 0.375;   // sphere radius
+const float R = 0.5;   // sphere radius
 
 // F(p) = 0 on the sphere surface, < 0 inside, > 0 outside.
 float ObjectImplicit(vec3 p) {
@@ -361,22 +361,43 @@ interface UniformLocs {
 // CodeView
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── localStorage helpers ──────────────────────────────────────────────────────
+
+const LS_KEY = (geo: ShaderGeometry) => `glsl-shader-${geo}`
+
+function lsLoad(geo: ShaderGeometry): string | null {
+  try { return localStorage.getItem(LS_KEY(geo)) } catch { return null }
+}
+
+function lsSave(geo: ShaderGeometry, src: string): void {
+  try { localStorage.setItem(LS_KEY(geo), src) } catch { /* quota exceeded, ignore */ }
+}
+
+function lsClear(geo: ShaderGeometry): void {
+  try { localStorage.removeItem(LS_KEY(geo)) } catch { /* ignore */ }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export class CodeView {
-  private canvas:       HTMLCanvasElement;
-  private textarea:     HTMLTextAreaElement;
-  private highlight:    HTMLPreElement;
-  private errorOverlay: HTMLDivElement;
-  private editorWrap:   HTMLDivElement;
-  private gl:           WebGL2RenderingContext;
-  private vao:          WebGLVertexArrayObject;
-  private program:      WebGLProgram | null = null;
-  private locs:         UniformLocs = { iResolution: null, iTime: null, iMouse: null };
+  private canvas:          HTMLCanvasElement;
+  private textarea:        HTMLTextAreaElement;
+  private highlight:       HTMLPreElement;
+  private errorOverlay:    HTMLDivElement;
+  private editorWrap:      HTMLDivElement;
+  private gl:              WebGL2RenderingContext;
+  private vao:             WebGLVertexArrayObject;
+  private program:         WebGLProgram | null = null;
+  private locs:            UniformLocs = { iResolution: null, iTime: null, iMouse: null };
   private startTime = Date.now();
   /** [mouseX, mouseY, buttonDown, 0] — Shadertoy iMouse convention */
   private mouse = new Float32Array(4);
   private animId = 0;
+  private currentGeometry: ShaderGeometry = 'sphere';
 
   constructor(container: HTMLElement, initialGeometry: ShaderGeometry = 'sphere') {
+    this.currentGeometry = initialGeometry;
+
     // ── Build DOM ────────────────────────────────────────────────────────
     container.innerHTML = /* html */ `
       <div id="glsl-canvas-wrap">
@@ -387,7 +408,9 @@ export class CodeView {
       <div id="glsl-editor-wrap">
         <div id="glsl-toolbar">
           <button id="glsl-run-btn">▶ Run</button>
+          <button id="glsl-reset-btn" title="Discard edits and restore the default shader">↺ Reset</button>
           <span class="glsl-toolbar-label">GLSL · fragment shader</span>
+          <span id="glsl-saved-indicator" class="glsl-saved-indicator" aria-live="polite"></span>
         </div>
         <div id="glsl-editor-container">
           <pre  id="glsl-highlight" aria-hidden="true"></pre>
@@ -425,12 +448,26 @@ export class CodeView {
       handle.classList.remove('dragging');
     });
 
-    // ── Syntax highlighting ──────────────────────────────────────────────
-    const initialShader = shaderForGeometry(initialGeometry);
+    // ── Syntax highlighting + localStorage ──────────────────────────────
+    const savedShader   = lsLoad(initialGeometry);
+    const initialShader = savedShader ?? shaderForGeometry(initialGeometry);
     this.textarea.value = initialShader;
     this.syncHighlight();
 
-    this.textarea.addEventListener('input', () => this.syncHighlight());
+    const savedIndicator = container.querySelector('#glsl-saved-indicator')! as HTMLSpanElement;
+    let saveTimer = 0;
+    const flashSaved = () => {
+      savedIndicator.textContent = '● saved';
+      clearTimeout(saveTimer);
+      saveTimer = window.setTimeout(() => { savedIndicator.textContent = '' }, 1800);
+    };
+
+    this.textarea.addEventListener('input', () => {
+      this.syncHighlight();
+      lsSave(this.currentGeometry, this.textarea.value);
+      flashSaved();
+    });
+
     // Keep pre scrolled in sync with textarea
     this.textarea.addEventListener('scroll', () => {
       this.highlight.scrollTop  = this.textarea.scrollTop;
@@ -489,6 +526,17 @@ export class CodeView {
     // ── Run button ───────────────────────────────────────────────────────
     container.querySelector('#glsl-run-btn')!.addEventListener('click', () => {
       this.compile(this.textarea.value);
+    });
+
+    // ── Reset button — restore default, clear localStorage ───────────────
+    container.querySelector('#glsl-reset-btn')!.addEventListener('click', () => {
+      if (!confirm('Discard your edits and restore the default shader?')) return;
+      lsClear(this.currentGeometry);
+      const def = shaderForGeometry(this.currentGeometry);
+      this.textarea.value = def;
+      this.syncHighlight();
+      this.compile(def);
+      savedIndicator.textContent = '';
     });
 
     // ── Keyboard shortcut: Ctrl/Cmd+Enter compiles ───────────────────────
@@ -615,13 +663,14 @@ export class CodeView {
   }
 
   /**
-   * Switch the editor to the canonical shader for the given geometry.
-   * Only replaces the code if the geometry actually changed (so a user
-   * who has been editing the current shader doesn't lose their work).
+   * Switch the editor to the given geometry's shader.
+   * Restores that geometry's localStorage save if one exists,
+   * otherwise falls back to the built-in default.
    */
   setGeometry(mode: ShaderGeometry): void {
-    const shader = shaderForGeometry(mode);
-    if (this.textarea.value === shader) return;
+    if (mode === this.currentGeometry) return;
+    this.currentGeometry = mode;
+    const shader = lsLoad(mode) ?? shaderForGeometry(mode);
     this.textarea.value = shader;
     this.syncHighlight();
     this.compile(shader);
