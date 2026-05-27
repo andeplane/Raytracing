@@ -25,6 +25,9 @@ the torus ideal for teaching.
 | **True min/max labels on y-axis** | The polynomial values span many orders of magnitude; anchoring the axis to the actual extremes prevents the curve from looking flat or clipped |
 | **Local extrema (◇ markers)** | Where `f′(t) = 0` — points where the ray is tangent to the torus surface; two roots merging into one here means a grazing hit |
 | **Torus tilt slider** | Rotating the torus around X changes all four roots simultaneously; watching the graph while tilting shows how symmetry breaks |
+| **Graph pan (drag)** | Click and drag anywhere in the graph to pan both axes simultaneously — lets you explore the full extent of the quartic without losing context |
+| **Graph zoom (scroll)** | Scroll (or pinch) to zoom in/out, keeping the point under the cursor fixed — zoom into a root cluster to see near-tangent intersections clearly |
+| **Graph reset (double-click)** | Instantly snaps back to the auto-computed view centred on the roots |
 
 ---
 
@@ -66,6 +69,17 @@ and write tests before the implementation (TDD).
 3. Refactor if needed, keeping all tests green.
 
 Coverage target: **≥ 90 %** for `torusMath.ts`.
+
+### Graph interaction tests
+
+The interactive graph features are tested in `src/graph.test.ts`:
+
+- **`findExtrema`** — given quartic coefficients, returns the local extrema of `f(t)`
+  (i.e., where `f′(t) = 0`). Tests cover: single minimum, multiple extrema, and the
+  edge case where the derivative lands *exactly* on 0.0 (not just changes sign).
+- **Zoom fixed-point invariant** — verifies that after a zoom centred at a fractional
+  position `frac` along the axis, the cursor position remains at exactly the same
+  fraction of the new range.
 
 ---
 
