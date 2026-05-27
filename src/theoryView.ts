@@ -210,60 +210,85 @@ function addShape(
 
 // ── Scene populators ────────────────────────────────────────────────────────
 
-/** Pixel highlight added to the setup scenes. */
-function addPixelHighlight(scene: THREE.Scene) {
+/**
+ * The torus mesh has rotation.x = π/2 (ring lies flat in world XZ plane),
+ * but quarticCoeffs / cylinderBarrelCoeffs expect the ray in LOCAL frame
+ * (torus axis = Z, ring in XY plane).
+ *
+ * Inverse of Rx(π/2)  →  Rx(-π/2):
+ *   local.x =  world.x
+ *   local.y =  world.z
+ *   local.z = -world.y
+ */
+function worldToLocalTorus(v: Vec3): Vec3 {
+  return { x: v.x, y: v.z, z: -v.y }
+}
+
+/** Pixel highlight at (x, y) on the near plane — marks the "active pixel". */
+function addPixelHighlight(scene: THREE.Scene, x = 0, y = 0) {
   const pixW = 0.28
   const pixGeo = new THREE.PlaneGeometry(pixW, pixW)
   const pixMat = new THREE.MeshBasicMaterial({ color: 0xffee44, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false })
   const pix = new THREE.Mesh(pixGeo, pixMat)
-  pix.position.set(0.3, 0.2, NEAR_Z + 0.002)
+  pix.position.set(x, y, NEAR_Z + 0.002)
   scene.add(pix)
   scene.add(new THREE.LineSegments(
-    new THREE.EdgesGeometry(pixGeo).applyMatrix4(new THREE.Matrix4().makeTranslation(0.3, 0.2, NEAR_Z + 0.003)),
+    new THREE.EdgesGeometry(pixGeo).applyMatrix4(new THREE.Matrix4().makeTranslation(x, y, NEAR_Z + 0.003)),
     new THREE.LineBasicMaterial({ color: 0xffdd00 }),
   ))
 }
 
+// ── Verified ray parameters ──────────────────────────────────────────────────
+// Eye is at (0, 0, EYE_Z=7). Geometry centred at origin.
+//
+// Sphere R=1.3 / R=1.5:  offset < R/eye_dist ≈ 0.19–0.22 keeps discriminant > 0.
+//   makeRay(0.2, 0.1) → hits at t≈5.8, t≈8.0   ✓
+//
+// Cylinder R=1.0 (axis=Y): only the z-component drives barrel; max lateral offset
+//   keeping discriminant > 0 is small. makeRay(0.1, 0) → t≈6.1, t≈7.9   ✓
+//
+// Torus R=2, r=0.6: quarticCoeffs needs ray in LOCAL frame (axis=Z, ring in XY).
+//   Centre ray world (0,0,-1) → local D=(0,-1,0), local O=(0,7,0) → 4 hits ✓
+
 function populateSetupSphere(scene: THREE.Scene) {
   const R = 1.3
   addShape(scene, 'sphere', R, 0)
-  const { eye, dir, O, D } = makeRay(0.3, 0.2)
+  const { eye, dir, O, D } = makeRay(0.2, 0.1)
   const hits = findRoots(sphereCoeffs(O, D, R), 0.001, 20).filter(t => t > 0)
   addRaySetup(scene, eye, dir, hits)
-  addPixelHighlight(scene)
+  addPixelHighlight(scene, 0.2, 0.1)
 }
 
 function populateSetupCylinder(scene: THREE.Scene) {
   const R = 1.0
   addShape(scene, 'cylinder', R, 0)
-  const { eye, dir, O, D } = makeRay(0.3, 0.2)
+  const { eye, dir, O, D } = makeRay(0.1, 0)
   const hits = cylinderHits(O, D, R, CYLINDER_HEIGHT, 0.001, 20).filter(t => t > 0)
   addRaySetup(scene, eye, dir, hits)
-  addPixelHighlight(scene)
+  addPixelHighlight(scene, 0.1, 0)
 }
 
 function populateSetupTorus(scene: THREE.Scene) {
   const R = 2.0, r = 0.6
   addShape(scene, 'torus', R, r)
-  const { eye, dir, O, D } = makeRay(0.0, 1.35)
-  const hits = findRoots(quarticCoeffs(O, D, R, r), 0.001, 20).filter(t => t > 0)
+  const { eye, dir, O, D } = makeRay(0, 0)
+  const hits = findRoots(quarticCoeffs(worldToLocalTorus(O), worldToLocalTorus(D), R, r), 0.001, 20).filter(t => t > 0)
   addRaySetup(scene, eye, dir, hits)
-  addPixelHighlight(scene)
+  addPixelHighlight(scene, 0, 0)
 }
 
 function populateSphere(scene: THREE.Scene) {
   const R = 1.5
   addShape(scene, 'sphere', R, 0)
-  const { eye, dir, O, D } = makeRay(0.4, 0.3)
-  const coeffs = sphereCoeffs(O, D, R)
-  const hits = findRoots(coeffs, 0.001, 20).filter(t => t > 0)
+  const { eye, dir, O, D } = makeRay(0.2, 0.1)
+  const hits = findRoots(sphereCoeffs(O, D, R), 0.001, 20).filter(t => t > 0)
   addRaySetup(scene, eye, dir, hits)
 }
 
 function populateCylinder(scene: THREE.Scene) {
   const R = 1.0
   addShape(scene, 'cylinder', R, 0)
-  const { eye, dir, O, D } = makeRay(0.5, 0.6)
+  const { eye, dir, O, D } = makeRay(0.1, 0)
   const hits = cylinderHits(O, D, R, CYLINDER_HEIGHT, 0.001, 20).filter(t => t > 0)
   addRaySetup(scene, eye, dir, hits)
 }
@@ -271,10 +296,8 @@ function populateCylinder(scene: THREE.Scene) {
 function populateTorus(scene: THREE.Scene) {
   const R = 2.0, r = 0.6
   addShape(scene, 'torus', R, r)
-  // Use a ray that reliably hits all 4 points on the torus
-  const { eye, dir, O, D } = makeRay(0.0, 1.35)
-  const coeffs = quarticCoeffs(O, D, R, r)
-  const hits = findRoots(coeffs, 0.001, 20).filter(t => t > 0)
+  const { eye, dir, O, D } = makeRay(0, 0)
+  const hits = findRoots(quarticCoeffs(worldToLocalTorus(O), worldToLocalTorus(D), R, r), 0.001, 20).filter(t => t > 0)
   addRaySetup(scene, eye, dir, hits)
 }
 
