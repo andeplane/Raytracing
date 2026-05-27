@@ -1,12 +1,13 @@
 /**
  * Main entry point — wires together the 3D scene, polynomial graph,
- * near-plane view, and slider controls.
+ * near-plane view, slider controls, and tab navigation.
  */
 import { Scene3D, type SceneParams } from './scene3d'
 import { PolynomialGraph } from './graph'
 import { NearPlaneView } from './nearPlane'
 import { quarticCoeffs, findRoots } from './torusMath'
 import type { QuarticCoeffs } from './torusMath'
+import { CodeView } from './codeView'
 
 // ── State ──────────────────────────────────────────────────────────────────
 // eyeZ and nearDist are fixed — not exposed in UI but used internally.
@@ -101,3 +102,28 @@ resizeObs.observe(nearPlaneCanvas)
 
 // ── Initial render ─────────────────────────────────────────────────────────
 updateAll()
+
+// ── Tab navigation ─────────────────────────────────────────────────────────
+let codeView: CodeView | null = null
+
+document.querySelectorAll<HTMLButtonElement>('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const target = btn.dataset.tab!
+
+    // Hide all panels and deselect all buttons
+    document.querySelectorAll<HTMLElement>('.tab-panel').forEach(p => { p.hidden = true })
+    document.querySelectorAll<HTMLButtonElement>('.tab-btn').forEach(b => {
+      b.setAttribute('aria-selected', 'false')
+    })
+
+    // Show the clicked panel and mark its button active
+    const panel = document.getElementById(`tab-${target}`) as HTMLElement
+    panel.hidden = false
+    btn.setAttribute('aria-selected', 'true')
+
+    // Lazy-init the Code tab on first visit
+    if (target === 'code' && !codeView) {
+      codeView = new CodeView(document.getElementById('code-view-root')!)
+    }
+  })
+})

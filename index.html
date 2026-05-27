@@ -15,6 +15,8 @@
         display: flex;
         flex-direction: column;
       }
+
+      /* ── Header ── */
       #header {
         padding: 8px 16px;
         background: #1a1a2e;
@@ -28,9 +30,38 @@
       }
       #header h1 { font-size: 14px; font-weight: bold; }
       #root-info { margin-left: auto; font-size: 12px; color: #aaa; }
-      #root-info .hit { color: #4ecca3; }
+      #root-info .hit  { color: #4ecca3; }
       #root-info .miss { color: #ff6b6b; }
-      #main { display: flex; flex: 1; overflow: hidden; }
+
+      /* ── Tab navigation ── */
+      #tab-nav { display: flex; gap: 2px; }
+      .tab-btn {
+        padding: 4px 14px;
+        font: 11px/1 'Courier New', monospace;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        background: transparent;
+        color: #555;
+        border: 1px solid #333;
+        border-bottom: none;
+        border-radius: 3px 3px 0 0;
+        cursor: pointer;
+        transition: color 0.15s, border-color 0.15s;
+      }
+      .tab-btn:hover { color: #aaa; border-color: #555; }
+      .tab-btn[aria-selected="true"] {
+        color: #7ec8e3;
+        border-color: #7ec8e3;
+        background: #0d0d1a;
+      }
+
+      /* ── Tab panels ── */
+      #tab-panels { display: flex; flex: 1; overflow: hidden; }
+      .tab-panel  { display: none; flex: 1; overflow: hidden; }
+      .tab-panel:not([hidden]) { display: flex; }
+
+      /* ── Intuition tab — identical to the old #main ── */
+      #tab-intuition { flex-direction: row; }
       #scene-container { flex: 1; position: relative; border-right: 1px solid #333; }
       #scene-canvas { width: 100%; height: 100%; display: block; }
       #right-panel {
@@ -54,63 +85,226 @@
         font-size: 11px; text-transform: uppercase; color: #7ec8e3;
         letter-spacing: 1px; margin-bottom: 8px;
       }
-      #near-plane-canvas { border: 1px solid #333; border-radius: 4px; cursor: crosshair; background: #0a0a1a; display: block; }
+      #near-plane-canvas {
+        border: 1px solid #333; border-radius: 4px;
+        cursor: crosshair; background: #0a0a1a; display: block;
+      }
       #graph-wrap { flex: 1; padding: 10px 14px; display: flex; flex-direction: column; min-height: 0; }
       #graph-wrap h2 {
         font-size: 11px; text-transform: uppercase; color: #7ec8e3;
         letter-spacing: 1px; margin-bottom: 4px; flex-shrink: 0;
       }
       #graph-subtitle { font-size: 10px; color: #555; margin-bottom: 8px; flex-shrink: 0; }
-      #graph-canvas { border: 1px solid #333; border-radius: 4px; background: #080810; flex: 1; display: block; width: 100%; min-height: 0; }
+      #graph-canvas {
+        border: 1px solid #333; border-radius: 4px;
+        background: #080810; flex: 1; display: block; width: 100%; min-height: 0;
+      }
+
+      /* ── Math tab ── */
+      #tab-math { justify-content: center; align-items: center; }
+      #math-placeholder {
+        display: flex; flex-direction: column; align-items: center;
+        gap: 14px; color: #444; text-align: center; padding: 32px;
+      }
+      #math-placeholder h2 {
+        font-size: 13px; text-transform: uppercase; letter-spacing: 2px; color: #555;
+      }
+      #math-placeholder p  { font-size: 12px; line-height: 1.8; color: #3a3a4a; }
+      #math-placeholder .eq {
+        font-size: 14px; color: #7ec8e3; padding: 12px 24px;
+        border: 1px solid #1e1e3a; border-radius: 4px; background: #0a0a1a;
+        letter-spacing: 0.5px;
+      }
+
+      /* ── Code tab ── */
+      #tab-code { flex-direction: row; }
+      #code-view-root { display: flex; flex: 1; overflow: hidden; }
+
+      /* Canvas pane */
+      #glsl-canvas-wrap { flex: 1; min-width: 0; position: relative; background: #000; }
+      #glsl-canvas { width: 100%; height: 100%; display: block; }
+      #error-overlay {
+        display: none;
+        position: absolute; bottom: 0; left: 0; right: 0;
+        background: rgba(200, 40, 40, 0.12);
+        border-top: 1px solid rgba(255, 80, 80, 0.3);
+        color: #ff8080;
+        font: 11px/1.6 'Courier New', monospace;
+        padding: 8px 12px;
+        white-space: pre-wrap;
+        max-height: 35%;
+        overflow-y: auto;
+      }
+
+      /* Editor pane */
+      #glsl-editor-wrap {
+        width: 460px; flex-shrink: 0;
+        display: flex; flex-direction: column;
+        background: #090910;
+        border-left: 1px solid #222;
+      }
+      #glsl-toolbar {
+        padding: 5px 10px;
+        border-bottom: 1px solid #1e1e2e;
+        display: flex; align-items: center; gap: 10px;
+        flex-shrink: 0;
+        background: #0d0d1a;
+      }
+      #glsl-run-btn {
+        padding: 3px 14px;
+        background: #0d1f0d; color: #4ecca3;
+        border: 1px solid #2a5a2a; border-radius: 3px;
+        cursor: pointer; font: 11px/1.6 'Courier New', monospace;
+        transition: background 0.15s, border-color 0.15s;
+      }
+      #glsl-run-btn:hover { background: #122212; border-color: #4ecca3; }
+      .glsl-toolbar-label {
+        font: 10px/1 'Courier New', monospace;
+        letter-spacing: 1px; text-transform: uppercase; color: #333;
+      }
+      .glsl-toolbar-hint {
+        margin-left: auto;
+        font: 10px/1 'Courier New', monospace;
+        color: #2a2a3a;
+      }
+
+      /* Textarea + pre overlay container */
+      #glsl-editor-container {
+        position: relative;
+        flex: 1;
+        overflow: hidden;
+        background: #090910;
+      }
+
+      /* Shared font/spacing for pre and textarea — MUST match exactly */
+      #glsl-highlight,
+      #glsl-editor {
+        position: absolute;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        margin: 0;
+        padding: 12px 14px;
+        font: 12px/1.65 'Courier New', monospace;
+        tab-size: 4;
+        white-space: pre;
+        word-wrap: normal;
+        border: none;
+        outline: none;
+      }
+
+      /* Highlighted pre — behind the textarea */
+      #glsl-highlight {
+        color: #c8d8e8;          /* default text colour */
+        background: transparent;
+        pointer-events: none;
+        overflow: hidden;        /* scrolled by JS in sync with textarea */
+        z-index: 0;
+      }
+
+      /* Editable textarea — transparent text, visible caret */
+      #glsl-editor {
+        background: transparent;
+        color: transparent;
+        caret-color: #c8d8e8;
+        resize: none;
+        overflow: auto;
+        z-index: 1;
+        -webkit-text-fill-color: transparent; /* Safari */
+        selection-color: rgba(126, 200, 227, 0.3);
+      }
+      #glsl-editor::selection {
+        background: rgba(126, 200, 227, 0.25);
+        color: transparent;
+      }
+
+      /* GLSL syntax highlight colours (VS Code dark+ palette) */
+      .hl-comment      { color: #5a8a50; font-style: italic; }
+      .hl-preprocessor { color: #9cdcfe; }
+      .hl-keyword      { color: #c586c0; }
+      .hl-type         { color: #4ec9b0; }
+      .hl-builtin      { color: #dcdcaa; }
+      .hl-number       { color: #b5cea8; }
     </style>
   </head>
   <body>
     <div id="header">
       <h1>🍩 Ray–Torus Intersection</h1>
       <span style="color:#555;font-size:11px">drag near-plane · orbit 3D · click torus to transform</span>
+
+      <div id="tab-nav">
+        <button class="tab-btn" data-tab="intuition" aria-selected="true">Intuition</button>
+        <button class="tab-btn" data-tab="math"      aria-selected="false">Math</button>
+        <button class="tab-btn" data-tab="code"      aria-selected="false">Code</button>
+      </div>
+
       <div id="root-info">—</div>
     </div>
-    <div id="main">
-      <div id="scene-container">
-        <canvas id="scene-canvas"></canvas>
-      </div>
-      <div id="right-panel">
-        <div id="controls-panel">
-          <h2>Parameters</h2>
-          <div class="ctrl-row">
-            <label>Major radius R</label>
-            <input type="range" id="ctrl-R" min="0.5" max="3.5" step="0.05" value="2">
-            <span class="val" id="val-R">2.00</span>
-          </div>
-          <div class="ctrl-row">
-            <label>Minor radius r</label>
-            <input type="range" id="ctrl-r" min="0.05" max="1.5" step="0.05" value="0.5">
-            <span class="val" id="val-r">0.50</span>
-          </div>
-          <div class="ctrl-row">
-            <label>Ray X (near plane)</label>
-            <input type="range" id="ctrl-rayX" min="-2.5" max="2.5" step="0.01" value="0">
-            <span class="val" id="val-rayX">0.00</span>
-          </div>
-          <div class="ctrl-row">
-            <label>Ray Y (near plane)</label>
-            <input type="range" id="ctrl-rayY" min="-2.5" max="2.5" step="0.01" value="0">
-            <span class="val" id="val-rayY">0.00</span>
-          </div>
-        </div>
 
-        <div id="near-plane-canvas-wrap">
-          <h2>Near Plane <span style="color:#444;font-size:9px">(click/drag to aim ray)</span></h2>
-          <canvas id="near-plane-canvas" width="350" height="150"></canvas>
-        </div>
+    <div id="tab-panels">
 
-        <div id="graph-wrap">
-          <h2>Quartic f(t)</h2>
-          <div id="graph-subtitle">f(t) = 0 ⟹ ray hits torus at parameter t</div>
-          <canvas id="graph-canvas"></canvas>
+      <!-- ── Intuition: the original 3-D + graph view ── -->
+      <div id="tab-intuition" class="tab-panel">
+        <div id="scene-container">
+          <canvas id="scene-canvas"></canvas>
+        </div>
+        <div id="right-panel">
+          <div id="controls-panel">
+            <h2>Parameters</h2>
+            <div class="ctrl-row">
+              <label>Major radius R</label>
+              <input type="range" id="ctrl-R" min="0.5" max="3.5" step="0.05" value="2">
+              <span class="val" id="val-R">2.00</span>
+            </div>
+            <div class="ctrl-row">
+              <label>Minor radius r</label>
+              <input type="range" id="ctrl-r" min="0.05" max="1.5" step="0.05" value="0.5">
+              <span class="val" id="val-r">0.50</span>
+            </div>
+            <div class="ctrl-row">
+              <label>Ray X (near plane)</label>
+              <input type="range" id="ctrl-rayX" min="-2.5" max="2.5" step="0.01" value="0">
+              <span class="val" id="val-rayX">0.00</span>
+            </div>
+            <div class="ctrl-row">
+              <label>Ray Y (near plane)</label>
+              <input type="range" id="ctrl-rayY" min="-2.5" max="2.5" step="0.01" value="0">
+              <span class="val" id="val-rayY">0.00</span>
+            </div>
+          </div>
+
+          <div id="near-plane-canvas-wrap">
+            <h2>Near Plane <span style="color:#444;font-size:9px">(click/drag to aim ray)</span></h2>
+            <canvas id="near-plane-canvas" width="350" height="150"></canvas>
+          </div>
+
+          <div id="graph-wrap">
+            <h2>Quartic f(t)</h2>
+            <div id="graph-subtitle">f(t) = 0 ⟹ ray hits torus at parameter t</div>
+            <canvas id="graph-canvas"></canvas>
+          </div>
         </div>
       </div>
+
+      <!-- ── Math: LaTeX derivation (placeholder) ── -->
+      <div id="tab-math" class="tab-panel" hidden>
+        <div id="math-placeholder">
+          <h2>Math</h2>
+          <p>LaTeX-rendered derivation coming soon.</p>
+          <div class="eq">(x² + y² + z² + R² − r²)² = 4R²(x² + y²)</div>
+          <p>
+            Substituting p(t) = O + t D gives a degree-4 polynomial in t.<br>
+            Its real roots are the ray–torus intersection parameters.
+          </p>
+        </div>
+      </div>
+
+      <!-- ── Code: WebGL shader editor ── -->
+      <div id="tab-code" class="tab-panel" hidden>
+        <div id="code-view-root"></div>
+      </div>
+
     </div>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
