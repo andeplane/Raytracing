@@ -123,6 +123,8 @@ class TheoryScene {
 
   private animate() {
     requestAnimationFrame(() => this.animate())
+    // Skip rendering when canvas is hidden (saves GPU on inactive sections)
+    if (!this.renderer.domElement.offsetParent) return
     this.controls.update()
     for (const ring of this.rings) ring.lookAt(this.camera.position)
     this.renderer.render(this.scene, this.camera)
@@ -208,24 +210,45 @@ function addShape(
 
 // ── Scene populators ────────────────────────────────────────────────────────
 
-function populateSetup(scene: THREE.Scene) {
-  // A small sphere in the scene to show the ray hitting something
-  const R = 1.3
-  addShape(scene, 'sphere', R, 0)
-
-  const { eye, dir, O, D } = makeRay(0.3, 0.2)
-  const coeffs = sphereCoeffs(O, D, R)
-  const hits = findRoots(coeffs, 0.001, 20).filter(t => t > 0)
-  addRaySetup(scene, eye, dir, hits)
-
-  // Highlight a "pixel" on the near plane (a small bright square)
+/** Pixel highlight added to the setup scenes. */
+function addPixelHighlight(scene: THREE.Scene) {
   const pixW = 0.28
   const pixGeo = new THREE.PlaneGeometry(pixW, pixW)
   const pixMat = new THREE.MeshBasicMaterial({ color: 0xffee44, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false })
   const pix = new THREE.Mesh(pixGeo, pixMat)
   pix.position.set(0.3, 0.2, NEAR_Z + 0.002)
   scene.add(pix)
-  scene.add(new THREE.LineSegments(new THREE.EdgesGeometry(pixGeo).applyMatrix4(new THREE.Matrix4().makeTranslation(0.3, 0.2, NEAR_Z + 0.003)), new THREE.LineBasicMaterial({ color: 0xffdd00 })))
+  scene.add(new THREE.LineSegments(
+    new THREE.EdgesGeometry(pixGeo).applyMatrix4(new THREE.Matrix4().makeTranslation(0.3, 0.2, NEAR_Z + 0.003)),
+    new THREE.LineBasicMaterial({ color: 0xffdd00 }),
+  ))
+}
+
+function populateSetupSphere(scene: THREE.Scene) {
+  const R = 1.3
+  addShape(scene, 'sphere', R, 0)
+  const { eye, dir, O, D } = makeRay(0.3, 0.2)
+  const hits = findRoots(sphereCoeffs(O, D, R), 0.001, 20).filter(t => t > 0)
+  addRaySetup(scene, eye, dir, hits)
+  addPixelHighlight(scene)
+}
+
+function populateSetupCylinder(scene: THREE.Scene) {
+  const R = 1.0
+  addShape(scene, 'cylinder', R, 0)
+  const { eye, dir, O, D } = makeRay(0.3, 0.2)
+  const hits = cylinderHits(O, D, R, CYLINDER_HEIGHT, 0.001, 20).filter(t => t > 0)
+  addRaySetup(scene, eye, dir, hits)
+  addPixelHighlight(scene)
+}
+
+function populateSetupTorus(scene: THREE.Scene) {
+  const R = 2.0, r = 0.6
+  addShape(scene, 'torus', R, r)
+  const { eye, dir, O, D } = makeRay(0.0, 1.35)
+  const hits = findRoots(quarticCoeffs(O, D, R, r), 0.001, 20).filter(t => t > 0)
+  addRaySetup(scene, eye, dir, hits)
+  addPixelHighlight(scene)
 }
 
 function populateSphere(scene: THREE.Scene) {
@@ -397,33 +420,28 @@ export class TheoryView {
   }
 
   private buildScenes() {
-    new TheoryScene({
-      canvas:  document.getElementById('theory-canvas-setup')    as HTMLCanvasElement,
-      camPos:  [6, 4, 10],
-      populate: populateSetup,
-    })
-    new TheoryScene({
-      canvas:  document.getElementById('theory-canvas-sphere')   as HTMLCanvasElement,
-      camPos:  [5, 3, 8],
-      populate: populateSphere,
-    })
-    new TheoryScene({
-      canvas:  document.getElementById('theory-canvas-cylinder') as HTMLCanvasElement,
-      camPos:  [5, 5, 8],
-      populate: populateCylinder,
-    })
-    new TheoryScene({
-      canvas:  document.getElementById('theory-canvas-torus')    as HTMLCanvasElement,
-      camPos:  [6, 4, 9],
-      populate: populateTorus,
-    })
+    // Three setup scenes — one per geometry so § 1 always matches the selector
+    new TheoryScene({ canvas: document.getElementById('theory-canvas-setup-sphere')   as HTMLCanvasElement, camPos: [6, 4, 10], populate: populateSetupSphere })
+    new TheoryScene({ canvas: document.getElementById('theory-canvas-setup-cylinder') as HTMLCanvasElement, camPos: [6, 4, 10], populate: populateSetupCylinder })
+    new TheoryScene({ canvas: document.getElementById('theory-canvas-setup-torus')    as HTMLCanvasElement, camPos: [6, 4, 10], populate: populateSetupTorus })
+
+    // Per-geometry deep-dive scenes
+    new TheoryScene({ canvas: document.getElementById('theory-canvas-sphere')   as HTMLCanvasElement, camPos: [5, 3, 8], populate: populateSphere })
+    new TheoryScene({ canvas: document.getElementById('theory-canvas-cylinder') as HTMLCanvasElement, camPos: [5, 5, 8], populate: populateCylinder })
+    new TheoryScene({ canvas: document.getElementById('theory-canvas-torus')    as HTMLCanvasElement, camPos: [6, 4, 9], populate: populateTorus })
   }
 
-  /** Show only the setup section + the section for the active geometry. */
+  /** Show the setup canvas + section that matches the active geometry. */
   setGeometry(mode: GeometryMode) {
+    // Toggle geometry sections
     const sections = document.querySelectorAll<HTMLElement>('#theory-scroll .theory-section[data-geometry]')
     for (const sec of sections) {
       sec.hidden = sec.dataset.geometry !== mode
+    }
+    // Toggle setup canvases (each lives in its own .theory-canvas-wrap[data-setup])
+    const setups = document.querySelectorAll<HTMLElement>('#theory-section-setup .theory-canvas-wrap[data-setup]')
+    for (const wrap of setups) {
+      wrap.hidden = wrap.dataset.setup !== mode
     }
   }
 }

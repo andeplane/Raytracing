@@ -328,9 +328,14 @@
       .hl-type         { color: #4ec9b0; }
       .hl-builtin      { color: #dcdcaa; }
       .hl-number       { color: #b5cea8; }
+
+      /* ── CSS-driven header visibility (no JS flash) ── */
+      /* root-info and the Intuition-only hint are hidden unless Intuition is active */
+      body:not([data-active-tab="intuition"]) #root-info     { visibility: hidden; }
+      body:not([data-active-tab="intuition"]) #intuition-hint { visibility: hidden; }
     </style>
   </head>
-  <body>
+  <body data-active-tab="theory">
     <div id="header">
       <h1 id="scene-title">🔵 Ray–Sphere Intersection</h1>
       <select id="geometry-select">
@@ -338,7 +343,7 @@
         <option value="cylinder">🔷 Cylinder</option>
         <option value="torus">🍩 Torus</option>
       </select>
-      <span style="color:#555;font-size:11px">drag near-plane · orbit 3D · click shape to transform</span>
+      <span id="intuition-hint" style="color:#555;font-size:11px">drag near-plane · orbit 3D · click shape to transform</span>
 
       <div id="tab-nav">
         <button class="tab-btn" data-tab="theory"    aria-selected="true">Theory</button>
@@ -355,12 +360,23 @@
       <div id="tab-theory" class="tab-panel">
         <div id="theory-scroll">
 
-          <!-- § 1 — Ray Casting Setup -->
-          <section class="theory-section">
+          <!-- § 1 — Ray Casting Setup (one canvas per geometry, toggled by selector) -->
+          <section class="theory-section" id="theory-section-setup">
             <div class="theory-section-heading">§ 1 &mdash; Ray Casting</div>
             <div class="theory-row">
-              <div class="theory-canvas-wrap hero">
-                <canvas id="theory-canvas-setup"></canvas>
+              <!-- sphere setup (default visible) -->
+              <div class="theory-canvas-wrap hero" data-setup="sphere">
+                <canvas id="theory-canvas-setup-sphere"></canvas>
+                <span class="theory-canvas-hint">drag to orbit</span>
+              </div>
+              <!-- cylinder setup (hidden until cylinder selected) -->
+              <div class="theory-canvas-wrap hero" data-setup="cylinder" hidden>
+                <canvas id="theory-canvas-setup-cylinder"></canvas>
+                <span class="theory-canvas-hint">drag to orbit</span>
+              </div>
+              <!-- torus setup (hidden until torus selected) -->
+              <div class="theory-canvas-wrap hero" data-setup="torus" hidden>
+                <canvas id="theory-canvas-setup-torus"></canvas>
                 <span class="theory-canvas-hint">drag to orbit</span>
               </div>
               <div class="theory-equations" id="theory-eq-setup"></div>

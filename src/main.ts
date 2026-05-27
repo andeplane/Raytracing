@@ -170,9 +170,6 @@ applyGeometryMode()
 let codeView:   CodeView   | null = null
 let theoryView: TheoryView | null = null
 
-// root-info (hit count) is only meaningful on the Intuition tab
-const rootInfoEl = document.getElementById('root-info')!
-
 function setActiveTab(target: string) {
   // Hide all panels, deselect all buttons
   document.querySelectorAll<HTMLElement>('.tab-panel').forEach(p => { p.hidden = true })
@@ -186,8 +183,8 @@ function setActiveTab(target: string) {
   document.querySelector<HTMLButtonElement>(`.tab-btn[data-tab="${target}"]`)!
     .setAttribute('aria-selected', 'true')
 
-  // root-info is only relevant on the Intuition tab
-  rootInfoEl.style.visibility = target === 'intuition' ? '' : 'hidden'
+  // CSS-driven header visibility — no JS flash (CSS reads data-active-tab immediately)
+  document.body.dataset.activeTab = target
 
   // Lazy-init tabs on first visit
   if (target === 'theory' && !theoryView) {
