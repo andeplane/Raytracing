@@ -3,7 +3,40 @@
 
 ---
 
-## Before You Start — Open the App
+## The Big Idea
+
+A ray tracer renders images by asking one question per pixel:
+
+> *Along the line of sight through this pixel, what surface is first visible?*
+
+The answer requires finding where a **ray** hits a surface. A ray is a half-line parameterised by a single scalar **t**:
+
+$$\mathbf{P}(t) = \mathbf{O} + t\,\mathbf{D}, \qquad t \ge 0$$
+
+where **O** is the camera eye and **D** is the unit direction through the pixel. The restriction t ≥ 0 means only forward travel counts.
+
+The key insight that makes analytic ray tracing elegant: most surfaces are described by an **implicit equation** F(**X**) = 0. Substituting the ray into F collapses a 3-D geometry problem into a 1-D root-finding problem:
+
+$$F(\mathbf{P}(t)) = 0 \quad\Longrightarrow\quad f(t) = 0$$
+
+Since P(t) is linear in t, the degree of f equals the degree of F. A sphere (degree 2) gives a quadratic. A torus (degree 4) gives a quartic. The roots of f(t) are the intersection distances — the smallest positive root is the visible hit.
+
+| Surface | F degree | Ray equation | Roots (max) |
+|---|---|---|---|
+| Plane | 1 | linear | 1 |
+| Sphere | 2 | quadratic | 2 |
+| Cylinder | 2 | quadratic | 2 + 2 caps |
+| Torus | 4 | **quartic** | **4** |
+
+Once you have a hit at t*, the surface **normal** is the gradient of F evaluated there and normalised:
+
+$$\mathbf{N} = \mathrm{normalize}\bigl(\nabla F(\mathbf{P}(t^*))\bigr)$$
+
+The Theory tab walks through this derivation step by step for each shape. This task is about *implementing* it in GLSL.
+
+---
+
+## Open the App
 
 > **[https://andeplane.github.io/Raytracing](https://andeplane.github.io/Raytracing)**  
 > (or run locally: `npm install && npm run dev`)
@@ -12,80 +45,95 @@ The app has three tabs:
 
 | Tab | What it does |
 |---|---|
-| **Theory** | Textbook-style walkthrough — read this first |
-| **Intuition** | Drag a ray, watch the polynomial graph update live |
-| **Code** | ← **Your workspace** — edit GLSL, click ▶ Run |
-
-Switch to the **Code** tab. At the top-left, select a geometry from the dropdown. You will implement the missing functions for **Cylinder** and **Torus**.
+| **Theory** | Full mathematical derivation — read this first |
+| **Intuition** | Aim a ray interactively, watch the polynomial roots update live |
+| **Code** | ← **Your workspace** — edit GLSL and the shader recompiles automatically |
 
 ---
 
 ## How the Code Tab Works
 
-The editor contains a fragment shader that renders one geometric object.
-You only need to edit **three functions** (everything else is provided):
+Select a geometry from the dropdown in the header. The editor shows a complete fragment shader that renders that shape by ray tracing.
+
+You only need to fill in **three functions** (the camera, lighting, and shading are already handled):
 
 ```glsl
-// 1. Implicit surface equation — F(p) = 0 on the surface, < 0 inside, > 0 outside
+// 1. Implicit surface — F(p) = 0 on the surface, < 0 inside, > 0 outside
 float ObjectImplicit(vec3 p) { ... }
 
-// 2. Outward unit normal at a surface point p
+// 2. Outward unit normal at a surface point p — equals normalize(∇F(p))
 vec3 ObjectNormal(vec3 p) { ... }
 
-// 3. First positive ray–object intersection distance, or -1.0 on miss
+// 3. First positive intersection distance, or -1.0 on miss
 float RayObject(vec3 ro, vec3 rd) { ... }
 ```
 
-The **Sphere** shader is already complete — study it as your reference:
+**The shader recompiles automatically** as you type (after a short pause). Compilation errors appear in red at the bottom of the canvas. Use **Ctrl/Cmd + Enter** or **▶ Run** for an instant recompile.
+
+Your edits are **saved automatically** in your browser. The **↺ Reset** button restores the original starter code if you need it.
+
+---
+
+## Reference: The Sphere (Already Complete)
+
+Study the sphere shader before starting — it is the simplest case of the pattern you will apply to cylinder and torus.
+
+**Sphere of radius R centred at origin:** F(**p**) = |**p**|² − R²
+
+Substituting **P**(t) = **O** + t**D** and expanding:
+
+$$(\mathbf{D}\cdot\mathbf{D})\,t^2 + 2(\mathbf{O}\cdot\mathbf{D})\,t + (|\mathbf{O}|^2 - R^2) = 0$$
+
+Discriminant Δ = (O·D)² − (D·D)(|O|²−R²). If Δ < 0 the ray misses; otherwise the two roots are (−(O·D) ± √Δ) / (D·D).
 
 ```glsl
-// Sphere of radius R centred at the origin
+const float R = 0.5;
+
 float ObjectImplicit(vec3 p) { return dot(p, p) - R * R; }
-vec3  ObjectNormal  (vec3 p) { return normalize(p); }
+
+vec3 ObjectNormal(vec3 p) { return normalize(p); }   // ∇F = 2p, factor cancels
 
 float RayObject(vec3 ro, vec3 rd) {
     float a     = dot(rd, rd);
-    float halfB = dot(ro, rd);
+    float halfB = dot(ro, rd);          // b/2 avoids the factor-of-2 everywhere
     float c     = dot(ro, ro) - R * R;
     float disc  = halfB * halfB - a * c;
-    if (disc < 0.0) return -1.0;
+    if (disc < 0.0) return -1.0;        // Δ < 0 → miss
     float sqD = sqrt(disc);
-    float t0  = (-halfB - sqD) / a;
-    float t1  = (-halfB + sqD) / a;
+    float t0  = (-halfB - sqD) / a;     // near root
+    float t1  = (-halfB + sqD) / a;     // far root
     if (t0 > 0.0001) return t0;
     if (t1 > 0.0001) return t1;
     return -1.0;
 }
 ```
 
-Press **▶ Run** (or **Ctrl/Cmd + Enter**) after every edit to recompile. Compilation errors appear in red in the canvas.
+Notice: `halfB = dot(ro, rd)` is b/2, which lets us write the discriminant as (b/2)² − ac instead of b² − 4ac. Same result, cleaner code.
 
 ---
 
 ## Part 1 — Cylinder
 
-Select **🔷 Cylinder** from the dropdown. The canvas is black — nothing renders because all three functions are placeholders. Your job is to fix them.
+Select **🔷 Cylinder** from the dropdown. The canvas is black — both `ObjectImplicit` and `RayObject` are placeholders that return constants. Your job is to fill them in.
 
 ### Background
 
-An **infinite cylinder** with radius `R`, axis along the Y-axis, centred at the origin satisfies:
+An infinite cylinder with radius R and axis along Y satisfies x² + z² = R², so:
 
-$$p_x^2 + p_z^2 = R^2 \quad\Longrightarrow\quad F(\mathbf{p}) = p_x^2 + p_z^2 - R^2$$
+$$F(\mathbf{p}) = p_x^2 + p_z^2 - R^2$$
 
-Substituting the ray $\mathbf{P}(t) = \mathbf{O} + t\mathbf{D}$ and keeping only the X and Z components:
+Crucially, **F ignores the y component** — the barrel extends infinitely along Y. Substituting the ray's x and z components only:
 
 $$\underbrace{(D_x^2 + D_z^2)}_{a}\,t^2 + \underbrace{2(O_x D_x + O_z D_z)}_{b}\,t + \underbrace{(O_x^2 + O_z^2 - R^2)}_{c} = 0$$
 
-This is the same quadratic structure as the sphere — same solver, different $a, b, c$.
+This is the **same quadratic structure** as the sphere — only the coefficients a, b, c are different (XZ components instead of full 3D dot products).
 
-The outward normal on the barrel is the radial direction away from the Y-axis:
-$$\hat{\mathbf{N}} = \text{normalize}(p_x,\; 0,\; p_z)$$
+The outward normal on the barrel points radially away from the Y axis:
+$$\mathbf{N} = \mathrm{normalize}(p_x,\; 0,\; p_z)$$
 
 ### Tasks
 
 **C1. Implement `ObjectImplicit`**
-
-Fill in the barrel equation:
 
 ```glsl
 float ObjectImplicit(vec3 p) {
@@ -93,7 +141,7 @@ float ObjectImplicit(vec3 p) {
 }
 ```
 
-Hit ▶ Run. The canvas is still black — `RayObject` still returns `-1.0` — but no compile errors means you're on track.
+The canvas is still black — `RayObject` still returns -1.0 — but no red error means you're on track.
 
 **C2. Implement `ObjectNormal`**
 
@@ -103,11 +151,11 @@ vec3 ObjectNormal(vec3 p) {
 }
 ```
 
-Still black. Good.
+Still black. Good — only `RayObject` remains.
 
 **C3. Implement `RayObject` for the infinite barrel**
 
-Mirror the sphere solver, but use only the XZ components of `ro` and `rd`:
+Mirror the sphere solver but use only the XZ components:
 
 ```glsl
 float RayObject(vec3 ro, vec3 rd) {
@@ -125,50 +173,42 @@ float RayObject(vec3 ro, vec3 rd) {
 }
 ```
 
-Hit ▶ Run. You should see an **infinite cylinder** — a shaded tube stretching through the scene. Drag the canvas to orbit around it.
+You should see a shaded tube stretching through the scene. Drag to orbit around it.
 
 **C4. Add finite caps (stretch goal)**
 
-To cap the cylinder at `y = ±H/2` (where `const float H = 3.0` is already in the shader), extend `RayObject`:
+The shader already defines `const float H = 3.0` as the cylinder height. To cap at y = ±H/2:
 
-1. After finding `t0`/`t1`, check that the hit point's Y coordinate is in `[-H/2, H/2]`. If not, discard that root.
-2. For each end cap (a disk at `y = ±H/2`):
-   - Find `t_cap` where the ray crosses that plane: `t_cap = (±H/2 - ro.y) / rd.y`
-   - Check the cap hit lies inside the disk: `length(ro.xz + t_cap * rd.xz) <= R`
-3. Return the smallest valid positive `t` among all candidates.
+1. After finding t0/t1, reject any root where |y(t)| > H/2.
+2. For each cap plane y = ±H/2, find t_cap = (±H/2 − ro.y) / rd.y. Accept the cap hit if x² + z² ≤ R² at that point.
+3. Return the smallest valid positive t among barrel and cap candidates.
 
-> **Tip:** Use the **Intuition** tab (🔷 Cylinder selected) to see how the polynomial graph changes as you aim the ray at different parts of the cylinder — especially what happens when the ray is parallel to the axis.
+> **Tip:** Check the **Intuition** tab with Cylinder selected. Watch how the polynomial graph changes as you aim toward the end cap vs. the barrel side.
 
 ---
 
 ## Part 2 — Torus
 
-Select **🍩 Torus** from the dropdown. The torus is much harder: the ray intersection produces a **degree-4 (quartic)** polynomial.
+Select **🍩 Torus** from the dropdown. The torus is significantly harder: ray intersection produces a **degree-4 (quartic) polynomial** with up to four real roots.
 
 ### Background
 
-A torus with major radius `MAJOR_R` (centre → tube centre) and minor radius `MINOR_R` (tube cross-section), centred at the origin, symmetric around the Y-axis:
+A torus with major radius R (centre → tube centre) and minor radius r (tube cross-section), symmetric around Y, satisfies:
 
 $$F(\mathbf{p}) = \bigl(|\mathbf{p}|^2 + R^2 - r^2\bigr)^2 - 4R^2\bigl(p_x^2 + p_z^2\bigr) = 0$$
 
-where $R$ = `MAJOR_R`, $r$ = `MINOR_R`.
+Substituting P(t) = O + tD yields a quartic. Define auxiliary scalars:
 
-Substituting $\mathbf{P}(t) = \mathbf{O} + t\mathbf{D}$ and expanding yields a quartic:
+| Symbol | Value | What it encodes |
+|--------|-------|-----------------|
+| α | `dot(rd, rd)` | |D|² |
+| β | `2 * dot(ro, rd)` | 2(O·D) |
+| γ | `dot(ro, ro) + R² - r²` | |O|² + R² − r² |
+| δ | `rd.x² + rd.z²` | D projected onto XZ |
+| ε | `2*(ro.x*rd.x + ro.z*rd.z)` | 2(O·D) projected onto XZ |
+| ζ | `ro.x² + ro.z²` | |O|² projected onto XZ |
 
-$$A t^4 + B t^3 + C t^2 + D t + E = 0$$
-
-Define the shorthand scalars:
-
-| Symbol | Value |
-|--------|-------|
-| $\alpha$ | `dot(rd, rd)` |
-| $\beta$ | `2 * dot(ro, rd)` |
-| $\gamma$ | `dot(ro, ro) + MAJOR_R² - MINOR_R²` |
-| $\delta$ | `rd.x² + rd.z²` |
-| $\varepsilon$ | `2*(ro.x*rd.x + ro.z*rd.z)` |
-| $\zeta$ | `ro.x² + ro.z²` |
-
-Then the quartic coefficients are:
+Notice: `αt² + βt + γ` = |P(t)|² + R² − r² and `δt² + εt + ζ` = P(t)_x² + P(t)_z². Squaring the first and subtracting 4R² times the second gives the quartic:
 
 $$A = \alpha^2, \quad B = 2\alpha\beta, \quad C = \beta^2 + 2\alpha\gamma - 4R^2\delta$$
 $$D = 2\beta\gamma - 4R^2\varepsilon, \quad E = \gamma^2 - 4R^2\zeta$$
@@ -180,18 +220,13 @@ $$D = 2\beta\gamma - 4R^2\varepsilon, \quad E = \gamma^2 - 4R^2\zeta$$
 ```glsl
 float ObjectImplicit(vec3 p) {
     float s  = dot(p, p) + MAJOR_R*MAJOR_R - MINOR_R*MINOR_R;
-    float xz = p.x*p.x + p.z*p.z;
-    return s*s - 4.0*MAJOR_R*MAJOR_R*xz;
+    return s*s - 4.0*MAJOR_R*MAJOR_R*(p.x*p.x + p.z*p.z);
 }
 ```
 
 **T2. Implement `ObjectNormal`**
 
-The normal is $\nabla F$ evaluated at the hit point. Differentiating:
-
-$$\frac{\partial F}{\partial p_x} = 4p_x\bigl(|\mathbf{p}|^2 + R^2 - r^2 - 2R^2\bigr), \quad
-  \frac{\partial F}{\partial p_y} = 4p_y\bigl(|\mathbf{p}|^2 + R^2 - r^2\bigr), \quad
-  \frac{\partial F}{\partial p_z} = 4p_z\bigl(|\mathbf{p}|^2 + R^2 - r^2 - 2R^2\bigr)$$
+The gradient of F, derived by differentiating the torus implicit (see Theory tab):
 
 ```glsl
 vec3 ObjectNormal(vec3 p) {
@@ -204,12 +239,13 @@ vec3 ObjectNormal(vec3 p) {
 }
 ```
 
-**T3. Implement `RayObject` — step 1: compute the quartic coefficients**
+**T3. Compute the quartic coefficients**
+
+Replace the `return -1.0;` in `RayObject` with:
 
 ```glsl
 float RayObject(vec3 ro, vec3 rd) {
-    float R  = MAJOR_R, r  = MINOR_R;
-    float R2 = R*R,     r2 = r*r;
+    float R2 = MAJOR_R*MAJOR_R, r2 = MINOR_R*MINOR_R;
 
     float alpha   = dot(rd, rd);
     float beta    = 2.0 * dot(ro, rd);
@@ -229,79 +265,70 @@ float RayObject(vec3 ro, vec3 rd) {
 }
 ```
 
-Hit ▶ Run — still black, but no compile errors means the coefficients are ready.
+No visual yet, but now the coefficients are right.
 
-**T4. Implement `RayObject` — step 2: solve the quartic**
+**T4. Solve the quartic — scan + bisect**
 
-Because the quartic has real coefficients, use a **scan + bisect** strategy:
-
-1. **Sample the polynomial** at `N` evenly-spaced values of `t` in `[0.001, 20.0]`.  
-   Evaluate $f(t) = At^4 + Bt^3 + Ct^2 + Dt + E$ using Horner's method:
-   ```glsl
-   float evalQuartic(float A, float B, float C, float D, float E, float t) {
-       return ((((A*t) + B)*t + C)*t + D)*t + E;
-   }
-   ```
-
-2. **Detect sign changes.** When `f(t_i)` and `f(t_{i+1})` differ in sign, there is a root in that interval.
-
-3. **Bisect to refine** — run ~8 iterations to narrow the bracket.
-
-4. **Return the smallest positive root found.**
+Evaluate f(t) = At⁴ + Bt³ + Ct² + Dt + E using **Horner's method** (numerically stable):
 
 ```glsl
-// Replace "return -1.0;" above with:
-float tMin = 0.001, tMax = 20.0;
-int   N    = 64;
-float dt   = (tMax - tMin) / float(N);
-float best = -1.0;
-
-float fPrev = evalQuartic(A,B,C,D,E, tMin);
-for (int i = 1; i <= N; i++) {
-    float t1 = tMin + float(i)*dt;
-    float f1 = evalQuartic(A,B,C,D,E, t1);
-    if (fPrev * f1 < 0.0) {
-        float lo = t1 - dt, hi = t1;
-        for (int j = 0; j < 8; j++) {
-            float mid = 0.5*(lo + hi);
-            if (evalQuartic(A,B,C,D,E, mid) * fPrev < 0.0) hi = mid;
-            else lo = mid;
-        }
-        float root = 0.5*(lo + hi);
-        if (root > 0.0001 && (best < 0.0 || root < best)) best = root;
-    }
-    fPrev = f1;
+float evalQuartic(float A, float B, float C, float D, float E, float t) {
+    return ((((A*t) + B)*t + C)*t + D)*t + E;
 }
-return best;
 ```
 
-Hit ▶ Run. If everything is correct you should see a **shaded torus** in the canvas. Drag to orbit. 🍩
+Then scan for sign changes and bisect each bracket. Replace `return -1.0;` above with:
 
-**T5. Quality and performance (stretch goals)**
+```glsl
+    float tMin = 0.001, tMax = 20.0;
+    int   N    = 64;
+    float dt   = (tMax - tMin) / float(N);
+    float best = -1.0;
+    float fPrev = evalQuartic(A,B,C,D,E, tMin);
 
-Once the torus renders correctly, experiment:
+    for (int i = 1; i <= N; i++) {
+        float t1 = tMin + float(i)*dt;
+        float f1 = evalQuartic(A,B,C,D,E, t1);
+        if (fPrev * f1 < 0.0) {             // sign change → bracket a root
+            float lo = t1 - dt, hi = t1;
+            for (int j = 0; j < 8; j++) {
+                float mid = 0.5*(lo + hi);
+                if (evalQuartic(A,B,C,D,E, mid) * fPrev < 0.0) hi = mid;
+                else lo = mid;
+            }
+            float root = 0.5*(lo + hi);
+            if (root > 0.0001 && (best < 0.0 || root < best)) best = root;
+        }
+        fPrev = f1;
+    }
+    return best;
+```
 
-- **Increase N** (e.g. 128, 256) — does image quality improve at grazing angles?
-- **Decrease N** (e.g. 16) — where do artifacts first appear?
-- **Replace bisection with Newton's method**: `t ← t - f(t)/f'(t)` where $f'(t) = 4At^3 + 3Bt^2 + 2Ct + D$. Does it converge in fewer iterations?
-- **Analytic solver:** Implement Neumark's or Ferrari's quartic formula and compare speed and precision.
+You should now see a shaded torus. Drag to orbit. 🍩
+
+**T5. Experiment (stretch goals)**
+
+- **Increase N** (128, 256) — does quality improve at grazing angles?
+- **Decrease N** (16, 8) — where do artefacts first appear?
+- **Newton's method** instead of bisection: `t ← t − f(t)/f'(t)` where f'(t) = 4At³ + 3Bt² + 2Ct + D. Does it converge faster?
+- **Analytic quartic** — look up Neumark's or Ferrari's formula and compare precision.
+
+> **Tip:** Switch to **Intuition → 🍩 Torus** and drag the ray. Watch the quartic graph — you can see all four roots appear and merge as the ray grazes the torus surface.
 
 ---
 
 ## Summary
 
-| Shape | `ObjectImplicit` | Intersection degree | Normal |
+The same three-step pattern works for every implicit surface:
+
+> 1. Write **F(p) = 0** — the implicit surface equation  
+> 2. Substitute the ray **P(t) = O + tD** → polynomial **f(t) = 0**  
+> 3. Find the **smallest positive root** → evaluate **N = normalize(∇F)** at the hit
+
+| Shape | `ObjectImplicit` | Poly degree | `ObjectNormal` |
 |---|---|---|---|
-| Sphere | `dot(p,p) - R²` | Quadratic | `normalize(p)` |
-| Cylinder | `p.x²+p.z² - R²` | Quadratic | `normalize(p.x, 0, p.z)` |
-| Torus | `(|p|²+R²-r²)² - 4R²(p.x²+p.z²)` | **Quartic** | `∇F / |∇F|` |
-
-The central pattern:
-
-> **Implicit surface** $F(\mathbf{p}) = 0$  
-> $\longrightarrow$ substitute the ray $\mathbf{P}(t) = \mathbf{O} + t\mathbf{D}$  
-> $\longrightarrow$ polynomial $f(t) = 0$  
-> $\longrightarrow$ find smallest positive root  
-> $\longrightarrow$ evaluate normal $= \nabla F$ at the hit point
+| Sphere | `dot(p,p) − R²` | 2 | `normalize(p)` |
+| Cylinder | `p.x²+p.z² − R²` | 2 | `normalize(p.x, 0, p.z)` |
+| Torus | `(‖p‖²+R²−r²)² − 4R²(p.x²+p.z²)` | **4** | `normalize(∇F(p))` |
 
 Good luck — and enjoy the shapes!
