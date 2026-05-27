@@ -220,6 +220,26 @@
       }
       .theory-eq-desc .katex { font-size: 0.95em; }
 
+      /* Theory sub-headings and tables */
+      .theory-subheading {
+        font-size: 9px; text-transform: uppercase; letter-spacing: 2px;
+        color: #4a8090; margin: 18px 0 6px;
+      }
+      .theory-table {
+        width: 100%; border-collapse: collapse;
+        font-size: 11px; margin: 4px 0 10px; color: #7a9aaa;
+      }
+      .theory-table th {
+        text-align: left; padding: 4px 10px;
+        border-bottom: 1px solid #1a2535;
+        font-size: 9px; text-transform: uppercase;
+        letter-spacing: 1px; color: #334455;
+      }
+      .theory-table td { padding: 5px 10px; border-bottom: 1px solid #0f1520; }
+      .theory-table tr:last-child td { border-bottom: none; }
+      .theory-table .hl { color: #7ec8e3; }
+      .theory-table code { font-family: 'Courier New', monospace; font-size: 10px; color: #9ab8c8; }
+
       /* ── Code tab ── */
       #tab-code { flex-direction: row; }
       #code-view-root { display: flex; flex: 1; overflow: hidden; }
