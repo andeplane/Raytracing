@@ -259,12 +259,32 @@
         overflow-y: auto;
       }
 
-      /* Editor pane */
+      /* Resize handle between canvas and editor */
+      #glsl-resize-handle {
+        width: 5px;
+        flex-shrink: 0;
+        background: #1a1a2e;
+        cursor: col-resize;
+        transition: background 0.15s;
+        position: relative;
+      }
+      #glsl-resize-handle:hover,
+      #glsl-resize-handle.dragging {
+        background: #3a5080;
+      }
+      /* Widen the hit-area without changing visual width */
+      #glsl-resize-handle::after {
+        content: '';
+        position: absolute;
+        inset: 0 -4px;
+      }
+
+      /* Editor pane — 50 % of the code view by default, user-draggable */
       #glsl-editor-wrap {
-        width: 460px; flex-shrink: 0;
+        width: 50%; flex-shrink: 0;
         display: flex; flex-direction: column;
         background: #090910;
-        border-left: 1px solid #222;
+        border-left: none;
       }
       #glsl-toolbar {
         padding: 5px 10px;

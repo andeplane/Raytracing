@@ -16,6 +16,8 @@
  * sphere / cylinder variants only need to touch those three functions.
  */
 
+export type ShaderGeometry = 'sphere' | 'cylinder' | 'torus'
+
 // ─────────────────────────────────────────────────────────────────────────────
 // WebGL boilerplate
 // ─────────────────────────────────────────────────────────────────────────────
@@ -45,66 +47,8 @@ void main() { mainImage(outColor, gl_FragCoord.xy); }
 // Default GLSL shader
 // ─────────────────────────────────────────────────────────────────────────────
 
-const DEFAULT_SHADER = `// ══════════════════════════════════════════════════════
-//  Object — swap the three functions below to change shape
-// ══════════════════════════════════════════════════════
-
-const float MAJOR_R = 1.35;   // torus: major radius (centre → tube centre)
-const float MINOR_R = 0.42;   // torus: minor radius (tube cross-section)
-
-// F(p) = 0 on the torus surface, < 0 inside, > 0 outside.
-float ObjectImplicit(vec3 p) {
-    float q = dot(p, p) + MAJOR_R * MAJOR_R - MINOR_R * MINOR_R;
-    return q * q - 4.0 * MAJOR_R * MAJOR_R * dot(p.xz, p.xz);
-}
-
-// Analytic gradient of ObjectImplicit gives the exact surface normal.
-vec3 ObjectNormal(vec3 p) {
-    float q = dot(p, p) + MAJOR_R * MAJOR_R - MINOR_R * MINOR_R;
-    return normalize(vec3(
-        4.0 * p.x * (q - 2.0 * MAJOR_R * MAJOR_R),
-        4.0 * p.y * q,
-        4.0 * p.z * (q - 2.0 * MAJOR_R * MAJOR_R)
-    ));
-}
-
-// First positive root t of the ray  p(t) = ro + t*rd.
-// Strategy: scan for a sign change in ObjectImplicit, then bisect the bracket.
-// Returns -1.0 when no intersection is found within MAX_DIST.
-#define MAX_DIST     40.0
-#define SCAN_STEPS   160
-#define BISECT_STEPS 22
-#define EPS          0.0001
-
-float RayObject(vec3 ro, vec3 rd) {
-    float scanStep = MAX_DIST / float(SCAN_STEPS);
-    float tPrev = 0.0;
-    float fPrev = ObjectImplicit(ro);
-
-    for (int i = 1; i <= SCAN_STEPS; i++) {
-        float t = float(i) * scanStep;
-        float f = ObjectImplicit(ro + rd * t);
-
-        if (fPrev * f <= 0.0) {      // sign change -> root in [tPrev, t]
-            float lo = tPrev, hi = t;
-
-            for (int j = 0; j < BISECT_STEPS; j++) {
-                float mid = 0.5 * (lo + hi);
-                float fm  = ObjectImplicit(ro + rd * mid);
-                if (fPrev * fm <= 0.0) { hi = mid; }
-                else                   { lo = mid; fPrev = fm; }
-            }
-
-            float root = 0.5 * (lo + hi);
-            if (root > EPS) return root;
-        }
-
-        tPrev = t;
-        fPrev = f;
-    }
-    return -1.0;
-}
-
+// ── Shared camera + shading tail (appended after the object functions) ─────────
+const SHADER_TAIL = `
 // ══════════════════════════════════════════════════════
 //  Camera & shading — generic, no need to edit these
 // ══════════════════════════════════════════════════════
@@ -125,7 +69,7 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     vec2 uv = (fragCoord - 0.5 * iResolution.xy) / iResolution.y;
     vec2 m  = iMouse.xy / iResolution.xy;
 
-    // Static camera — hold mouse button and drag to orbit.
+    // Hold mouse button and drag to orbit.
     vec3 ro = vec3(0.0, 2.5, 8.0);
     if (iMouse.z > 0.0) {
         ro.yz *= Rot(-m.y * 3.14159 + 0.8);
@@ -146,12 +90,7 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
         float spec     = pow(max(dot(n, halfDir), 0.0), 64.0);
         float fresnel  = pow(1.0 - max(dot(n, -rd), 0.0), 3.0);
 
-        // Procedural stripe pattern (ring angle + tube angle)
-        float ring = atan(p.z, p.x);
-        float tube = atan(p.y, length(p.xz) - MAJOR_R);
-        float pat  = 0.5 + 0.5 * cos(18.0 * ring + 8.0 * tube);
-        vec3  base = vec3(0.80, 0.88, 1.0) * mix(0.65, 1.15, pat);
-
+        vec3  base = shadeSurface(p);
         col  = base * (0.2 + 0.8 * diffuse);
         col += vec3(1.0) * spec * 0.45;
         col += vec3(0.35, 0.45, 0.60) * fresnel;
@@ -160,6 +99,141 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     fragColor = vec4(pow(col, vec3(0.4545)), 1.0);   // gamma
 }
 `;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Per-geometry shaders
+// ─────────────────────────────────────────────────────────────────────────────
+
+const SPHERE_SHADER = `// ══════════════════════════════════════════════════════
+//  Object — Sphere (radius R, centred at origin)
+// ══════════════════════════════════════════════════════
+
+const float R = 1.5;   // sphere radius
+
+// F(p) = 0 on the sphere surface, < 0 inside, > 0 outside.
+float ObjectImplicit(vec3 p) {
+    return dot(p, p) - R * R;
+}
+
+// Outward unit normal at surface point p (gradient of ObjectImplicit).
+vec3 ObjectNormal(vec3 p) {
+    return normalize(p);
+}
+
+// Analytic quadratic solve:  (D·D)t² + 2(O·D)t + (|O|²−R²) = 0
+// Returns the first positive t, or -1.0 on miss.
+float RayObject(vec3 ro, vec3 rd) {
+    float a     = dot(rd, rd);
+    float halfB = dot(ro, rd);          // = b/2
+    float c     = dot(ro, ro) - R * R;
+    float disc  = halfB * halfB - a * c;
+    if (disc < 0.0) return -1.0;        // ray misses
+    float sqD   = sqrt(disc);
+    float t0    = (-halfB - sqD) / a;   // near root
+    float t1    = (-halfB + sqD) / a;   // far  root
+    if (t0 > 0.0001) return t0;
+    if (t1 > 0.0001) return t1;
+    return -1.0;
+}
+
+// Procedural surface colour — latitude/longitude stripe pattern.
+vec3 shadeSurface(vec3 p) {
+    float lat = atan(p.y, length(p.xz));
+    float lon = atan(p.z, p.x);
+    float pat = 0.5 + 0.5 * cos(8.0 * lat + 6.0 * lon);
+    return vec3(0.80, 0.88, 1.0) * mix(0.65, 1.15, pat);
+}
+` + SHADER_TAIL;
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+const CYLINDER_SHADER = `// ══════════════════════════════════════════════════════
+//  Object — Cylinder (radius R, axis = Y, infinite barrel)
+// ══════════════════════════════════════════════════════
+
+const float R = 1.5;   // cylinder radius
+
+// TODO: implement cylinder implicit equation.
+// Hint: a point p is on the barrel when  px² + pz² = R²
+//       ⟹  F(p) = px² + pz² - R²
+float ObjectImplicit(vec3 p) {
+    // TODO: replace with barrel equation
+    return 1.0;   // placeholder — always "outside"
+}
+
+// TODO: implement cylinder surface normal.
+// Hint: the outward normal on the barrel is  normalize(vec3(p.x, 0, p.z))
+vec3 ObjectNormal(vec3 p) {
+    // TODO: replace with correct normal
+    return vec3(0.0, 1.0, 0.0);   // placeholder
+}
+
+// TODO: implement ray–cylinder intersection.
+// Hint: substitute ray P(t) = ro + t·rd into ObjectImplicit:
+//   (Dx²+Dz²)t² + 2(OxDx+OzDz)t + (Ox²+Oz²−R²) = 0
+// Solve the quadratic; then optionally add cap discs at y = ±H/2.
+float RayObject(vec3 ro, vec3 rd) {
+    // TODO: solve quadratic and handle caps
+    return -1.0;   // placeholder — never intersects
+}
+
+// Surface colour — vertical + azimuth stripe pattern.
+vec3 shadeSurface(vec3 p) {
+    float az  = atan(p.z, p.x);
+    float pat = 0.5 + 0.5 * cos(12.0 * az + 6.0 * p.y);
+    return vec3(0.80, 0.88, 1.0) * mix(0.65, 1.15, pat);
+}
+` + SHADER_TAIL;
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+const TORUS_SHADER = `// ══════════════════════════════════════════════════════
+//  Object — Torus (major radius R, minor radius r)
+// ══════════════════════════════════════════════════════
+
+const float MAJOR_R = 1.35;   // torus: major radius (centre → tube centre)
+const float MINOR_R = 0.42;   // torus: minor radius (tube cross-section)
+
+// TODO: implement torus implicit equation.
+// Hint: F(p) = (|p|² + R² - r²)² - 4R²(px² + pz²)
+float ObjectImplicit(vec3 p) {
+    // TODO: replace with torus implicit equation
+    return 1.0;   // placeholder — always "outside"
+}
+
+// TODO: implement torus surface normal.
+// Hint: analytic gradient of ObjectImplicit — see Theory tab for derivation.
+vec3 ObjectNormal(vec3 p) {
+    // TODO: replace with correct normal
+    return vec3(0.0, 1.0, 0.0);   // placeholder
+}
+
+// TODO: implement ray–torus intersection.
+// Hint: substituting ray P(t) = ro + t·rd into ObjectImplicit gives a
+// degree-4 (quartic) polynomial. Options:
+//   • Ferrari's / Neumark's analytic quartic solver
+//   • Scan for sign changes + bisection (simpler, but slower)
+float RayObject(vec3 ro, vec3 rd) {
+    // TODO: solve quartic or use scan + bisect
+    return -1.0;   // placeholder — never intersects
+}
+
+// Surface colour — ring + tube stripe pattern.
+vec3 shadeSurface(vec3 p) {
+    float ring = atan(p.z, p.x);
+    float tube = atan(p.y, length(p.xz) - MAJOR_R);
+    float pat  = 0.5 + 0.5 * cos(18.0 * ring + 8.0 * tube);
+    return vec3(0.80, 0.88, 1.0) * mix(0.65, 1.15, pat);
+}
+` + SHADER_TAIL;
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+function shaderForGeometry(mode: ShaderGeometry): string {
+  if (mode === 'sphere')   return SPHERE_SHADER
+  if (mode === 'cylinder') return CYLINDER_SHADER
+  return TORUS_SHADER
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GLSL syntax highlighter  (tokenises left-to-right, highest priority first)
@@ -292,6 +366,7 @@ export class CodeView {
   private textarea:     HTMLTextAreaElement;
   private highlight:    HTMLPreElement;
   private errorOverlay: HTMLDivElement;
+  private editorWrap:   HTMLDivElement;
   private gl:           WebGL2RenderingContext;
   private vao:          WebGLVertexArrayObject;
   private program:      WebGLProgram | null = null;
@@ -301,13 +376,14 @@ export class CodeView {
   private mouse = new Float32Array(4);
   private animId = 0;
 
-  constructor(container: HTMLElement) {
+  constructor(container: HTMLElement, initialGeometry: ShaderGeometry = 'sphere') {
     // ── Build DOM ────────────────────────────────────────────────────────
     container.innerHTML = /* html */ `
       <div id="glsl-canvas-wrap">
         <canvas id="glsl-canvas"></canvas>
         <div id="error-overlay"></div>
       </div>
+      <div id="glsl-resize-handle" title="Drag to resize"></div>
       <div id="glsl-editor-wrap">
         <div id="glsl-toolbar">
           <button id="glsl-run-btn">▶ Run</button>
@@ -327,9 +403,31 @@ export class CodeView {
     this.textarea     = container.querySelector('#glsl-editor')!    as HTMLTextAreaElement;
     this.highlight    = container.querySelector('#glsl-highlight')!  as HTMLPreElement;
     this.errorOverlay = container.querySelector('#error-overlay')!  as HTMLDivElement;
+    this.editorWrap   = container.querySelector('#glsl-editor-wrap')! as HTMLDivElement;
+
+    // ── Resize handle ────────────────────────────────────────────────────
+    const handle = container.querySelector('#glsl-resize-handle')! as HTMLDivElement;
+    let resizing = false;
+    handle.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      resizing = true;
+      handle.classList.add('dragging');
+    });
+    window.addEventListener('mousemove', (e) => {
+      if (!resizing) return;
+      const rect = container.getBoundingClientRect();
+      const newW = Math.round(Math.max(160, Math.min(rect.width - 160, rect.right - e.clientX)));
+      this.editorWrap.style.width = `${newW}px`;
+    });
+    window.addEventListener('mouseup', () => {
+      if (!resizing) return;
+      resizing = false;
+      handle.classList.remove('dragging');
+    });
 
     // ── Syntax highlighting ──────────────────────────────────────────────
-    this.textarea.value = DEFAULT_SHADER;
+    const initialShader = shaderForGeometry(initialGeometry);
+    this.textarea.value = initialShader;
     this.syncHighlight();
 
     this.textarea.addEventListener('input', () => this.syncHighlight());
@@ -402,7 +500,7 @@ export class CodeView {
     });
 
     // ── Initial compile + render loop ────────────────────────────────────
-    this.compile(DEFAULT_SHADER);
+    this.compile(initialShader);
     this.startLoop();
   }
 
@@ -514,6 +612,19 @@ export class CodeView {
     gl.uniform4fv(this.locs.iMouse, this.mouse);
 
     gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  /**
+   * Switch the editor to the canonical shader for the given geometry.
+   * Only replaces the code if the geometry actually changed (so a user
+   * who has been editing the current shader doesn't lose their work).
+   */
+  setGeometry(mode: ShaderGeometry): void {
+    const shader = shaderForGeometry(mode);
+    if (this.textarea.value === shader) return;
+    this.textarea.value = shader;
+    this.syncHighlight();
+    this.compile(shader);
   }
 
   /** Stop the animation loop and release GPU resources. */

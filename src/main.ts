@@ -7,7 +7,7 @@ import { PolynomialGraph } from './graph'
 import { NearPlaneView } from './nearPlane'
 import { quarticCoeffs, findRoots } from './torusMath'
 import type { QuarticCoeffs } from './torusMath'
-import { CodeView } from './codeView'
+import { CodeView, type ShaderGeometry } from './codeView'
 import { TheoryView } from './theoryView'
 import { sphereCoeffs } from './sphereMath'
 import { cylinderBarrelCoeffs, cylinderHits, CYLINDER_HEIGHT } from './cylinderMath'
@@ -76,6 +76,7 @@ function applyGeometryMode() {
   document.getElementById('label-majorR')!.textContent = meta.majorLabel
   document.getElementById('ctrl-row-minorR')!.style.display = meta.showMinorR ? '' : 'none'
   theoryView?.setGeometry(params.geometryMode)
+  codeView?.setGeometry(params.geometryMode as ShaderGeometry)
   updateAll()
 }
 
@@ -199,7 +200,7 @@ function setActiveTab(target: string) {
     theoryView.setGeometry(params.geometryMode)
   }
   if (target === 'code' && !codeView) {
-    codeView = new CodeView(document.getElementById('code-view-root')!)
+    codeView = new CodeView(document.getElementById('code-view-root')!, params.geometryMode as ShaderGeometry)
   }
 }
 
