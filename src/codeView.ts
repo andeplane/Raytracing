@@ -465,10 +465,14 @@ export class CodeView {
       saveTimer = window.setTimeout(() => { savedIndicator.textContent = '' }, 1800);
     };
 
+    let compileTimer = 0;
     this.textarea.addEventListener('input', () => {
       this.syncHighlight();
       lsSave(this.currentGeometry, this.textarea.value);
       flashSaved();
+      // Recompile ~400 ms after the user stops typing
+      clearTimeout(compileTimer);
+      compileTimer = window.setTimeout(() => this.compile(this.textarea.value), 400);
     });
 
     // Keep pre + line numbers scrolled in sync with textarea
