@@ -31,6 +31,38 @@ export interface SceneParams {
   rayY: number
 }
 
+// ── Shared geometry utilities (also used by TheoryScene) ─────────────────────
+
+/** Build a Three.js geometry for the given mode and radii. */
+export function buildShapeGeometry(
+  mode: GeometryMode,
+  majorR: number,
+  minorR: number,
+  detail: 'high' | 'low',
+): THREE.BufferGeometry {
+  if (mode === 'sphere') {
+    return detail === 'high'
+      ? new THREE.SphereGeometry(majorR, 64, 32)
+      : new THREE.SphereGeometry(majorR, 16, 8)
+  } else if (mode === 'cylinder') {
+    return detail === 'high'
+      ? new THREE.CylinderGeometry(majorR, majorR, CYLINDER_HEIGHT, 64)
+      : new THREE.CylinderGeometry(majorR, majorR, CYLINDER_HEIGHT, 16)
+  } else {
+    return detail === 'high'
+      ? new THREE.TorusGeometry(majorR, minorR, 80, 160)
+      : new THREE.TorusGeometry(majorR, minorR, 16, 48)
+  }
+}
+
+/** Apply the canonical default rotation for a geometry mode. */
+export function setDefaultRotation(mesh: THREE.Mesh, mode: GeometryMode): void {
+  mesh.rotation.set(0, 0, 0)
+  if (mode === 'torus') {
+    mesh.rotation.x = Math.PI / 2  // torus lies flat (axis=Y in world)
+  }
+}
+
 export class Scene3D {
   private renderer: THREE.WebGLRenderer
   private scene: THREE.Scene
@@ -138,30 +170,12 @@ export class Scene3D {
 
   /** Create geometry for the current mode. */
   private makeShapeGeo(p: SceneParams, detail: 'high' | 'low'): THREE.BufferGeometry {
-    if (p.geometryMode === 'sphere') {
-      return detail === 'high'
-        ? new THREE.SphereGeometry(p.majorR, 64, 32)
-        : new THREE.SphereGeometry(p.majorR, 16, 8)
-    } else if (p.geometryMode === 'cylinder') {
-      // Three.js CylinderGeometry axis = Y — matches cylinderMath.ts local frame
-      return detail === 'high'
-        ? new THREE.CylinderGeometry(p.majorR, p.majorR, CYLINDER_HEIGHT, 64)
-        : new THREE.CylinderGeometry(p.majorR, p.majorR, CYLINDER_HEIGHT, 16)
-    } else {
-      // Torus: Three.js default is XY plane (axis=Z) — matches torusMath.ts
-      return detail === 'high'
-        ? new THREE.TorusGeometry(p.majorR, p.minorR, 80, 160)
-        : new THREE.TorusGeometry(p.majorR, p.minorR, 16, 48)
-    }
+    return buildShapeGeometry(p.geometryMode, p.majorR, p.minorR, detail)
   }
 
   /** Default world rotation for each geometry mode. */
   private applyDefaultRotation(p: SceneParams) {
-    this.shapeMesh.rotation.set(0, 0, 0)
-    if (p.geometryMode === 'torus') {
-      this.shapeMesh.rotation.x = Math.PI / 2  // torus lies flat (axis=Y in world) by default
-    }
-    // cylinder and sphere: no initial rotation needed
+    setDefaultRotation(this.shapeMesh, p.geometryMode)
   }
 
   private buildObjects() {

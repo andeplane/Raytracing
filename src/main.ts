@@ -8,6 +8,7 @@ import { NearPlaneView } from './nearPlane'
 import { quarticCoeffs, findRoots } from './torusMath'
 import type { QuarticCoeffs } from './torusMath'
 import { CodeView } from './codeView'
+import { TheoryView } from './theoryView'
 import { sphereCoeffs } from './sphereMath'
 import { cylinderBarrelCoeffs, cylinderHits, CYLINDER_HEIGHT } from './cylinderMath'
 
@@ -165,26 +166,47 @@ resizeObs.observe(nearPlaneCanvas)
 applyGeometryMode()
 
 // ── Tab navigation ─────────────────────────────────────────────────────────
-let codeView: CodeView | null = null
+let codeView:   CodeView   | null = null
+let theoryView: TheoryView | null = null
+
+// Elements only relevant when the Intuition or Code tab is active
+const headerOnlyForInteractive = [
+  document.getElementById('scene-title')!,
+  document.getElementById('geometry-select')!,
+  document.getElementById('root-info')!,
+]
+
+function setActiveTab(target: string) {
+  // Hide all panels, deselect all buttons
+  document.querySelectorAll<HTMLElement>('.tab-panel').forEach(p => { p.hidden = true })
+  document.querySelectorAll<HTMLButtonElement>('.tab-btn').forEach(b => {
+    b.setAttribute('aria-selected', 'false')
+  })
+
+  // Show target panel, mark its button active
+  const panel = document.getElementById(`tab-${target}`) as HTMLElement
+  panel.hidden = false
+  document.querySelector<HTMLButtonElement>(`.tab-btn[data-tab="${target}"]`)!
+    .setAttribute('aria-selected', 'true')
+
+  // Hide Intuition-only header items on Theory tab
+  const isTheory = target === 'theory'
+  for (const el of headerOnlyForInteractive) {
+    el.style.visibility = isTheory ? 'hidden' : ''
+  }
+
+  // Lazy-init tabs on first visit
+  if (target === 'theory' && !theoryView) {
+    theoryView = new TheoryView(document.getElementById('tab-theory')!)
+  }
+  if (target === 'code' && !codeView) {
+    codeView = new CodeView(document.getElementById('code-view-root')!)
+  }
+}
 
 document.querySelectorAll<HTMLButtonElement>('.tab-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const target = btn.dataset.tab!
-
-    // Hide all panels and deselect all buttons
-    document.querySelectorAll<HTMLElement>('.tab-panel').forEach(p => { p.hidden = true })
-    document.querySelectorAll<HTMLButtonElement>('.tab-btn').forEach(b => {
-      b.setAttribute('aria-selected', 'false')
-    })
-
-    // Show the clicked panel and mark its button active
-    const panel = document.getElementById(`tab-${target}`) as HTMLElement
-    panel.hidden = false
-    btn.setAttribute('aria-selected', 'true')
-
-    // Lazy-init the Code tab on first visit
-    if (target === 'code' && !codeView) {
-      codeView = new CodeView(document.getElementById('code-view-root')!)
-    }
-  })
+  btn.addEventListener('click', () => setActiveTab(btn.dataset.tab!))
 })
+
+// Open on Theory by default
+setActiveTab('theory')

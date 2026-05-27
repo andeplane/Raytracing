@@ -107,21 +107,118 @@
         background: #080810; flex: 1; display: block; width: 100%; min-height: 0;
       }
 
-      /* ── Math tab ── */
-      #tab-math { justify-content: center; align-items: center; }
-      #math-placeholder {
-        display: flex; flex-direction: column; align-items: center;
-        gap: 14px; color: #444; text-align: center; padding: 32px;
+      /* ── Theory tab ── */
+      #tab-theory { flex-direction: column; overflow: hidden; }
+      #theory-scroll {
+        flex: 1;
+        overflow-y: auto;
+        overflow-x: hidden;
+        padding: 24px 32px 40px;
+        display: flex;
+        flex-direction: column;
+        gap: 0;
       }
-      #math-placeholder h2 {
-        font-size: 13px; text-transform: uppercase; letter-spacing: 2px; color: #555;
+      #theory-scroll::-webkit-scrollbar { width: 6px; }
+      #theory-scroll::-webkit-scrollbar-track { background: #0d0d1a; }
+      #theory-scroll::-webkit-scrollbar-thumb { background: #2a3050; border-radius: 3px; }
+
+      .theory-section {
+        padding: 28px 0 32px;
+        border-bottom: 1px solid #1a1a2e;
       }
-      #math-placeholder p  { font-size: 12px; line-height: 1.8; color: #3a3a4a; }
-      #math-placeholder .eq {
-        font-size: 14px; color: #7ec8e3; padding: 12px 24px;
-        border: 1px solid #1e1e3a; border-radius: 4px; background: #0a0a1a;
+      .theory-section:last-child { border-bottom: none; }
+
+      .theory-section-heading {
+        font-size: 13px;
+        font-weight: bold;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        color: #7ec8e3;
+        margin-bottom: 18px;
+      }
+
+      .theory-row {
+        display: flex;
+        gap: 28px;
+        align-items: flex-start;
+      }
+
+      /* Setup section uses a taller scene */
+      .theory-canvas-wrap {
+        flex-shrink: 0;
+        width: 380px;
+        height: 280px;
+        border: 1px solid #1e1e30;
+        border-radius: 6px;
+        overflow: hidden;
+        background: #080812;
+        position: relative;
+      }
+      .theory-canvas-wrap.hero {
+        width: 420px;
+        height: 320px;
+      }
+      .theory-canvas-wrap canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      .theory-canvas-hint {
+        position: absolute;
+        bottom: 6px;
+        right: 8px;
+        font-size: 9px;
+        color: #333;
         letter-spacing: 0.5px;
+        pointer-events: none;
       }
+
+      .theory-equations {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+      }
+
+      .theory-intro {
+        font-size: 12px;
+        line-height: 1.85;
+        color: #888;
+        margin-bottom: 14px;
+      }
+      .theory-intro strong { color: #b0d8e8; }
+      .theory-intro em { color: #9ec8dc; font-style: normal; }
+
+      .theory-eq-block {
+        background: #0a0a18;
+        border: 1px solid #1a1a2e;
+        border-radius: 5px;
+        padding: 12px 16px;
+        margin-bottom: 10px;
+      }
+      .theory-eq-label {
+        font-size: 9px;
+        text-transform: uppercase;
+        letter-spacing: 1.5px;
+        color: #3a5a6a;
+        margin-bottom: 8px;
+      }
+      .theory-eq-body {
+        color: #c8dce8;
+        overflow-x: auto;
+        padding: 4px 0;
+      }
+      /* KaTeX overrides to match dark theme */
+      .theory-eq-body .katex { font-size: 1.05em; }
+      .theory-eq-body .katex-display { margin: 4px 0; }
+      .theory-eq-desc {
+        font-size: 10px;
+        color: #4a6070;
+        margin-top: 8px;
+        line-height: 1.7;
+      }
+      .theory-eq-desc .katex { font-size: 0.95em; }
 
       /* ── Code tab ── */
       #tab-code { flex-direction: row; }
@@ -244,8 +341,8 @@
       <span style="color:#555;font-size:11px">drag near-plane · orbit 3D · click shape to transform</span>
 
       <div id="tab-nav">
-        <button class="tab-btn" data-tab="intuition" aria-selected="true">Intuition</button>
-        <button class="tab-btn" data-tab="math"      aria-selected="false">Math</button>
+        <button class="tab-btn" data-tab="theory"    aria-selected="true">Theory</button>
+        <button class="tab-btn" data-tab="intuition" aria-selected="false">Intuition</button>
         <button class="tab-btn" data-tab="code"      aria-selected="false">Code</button>
       </div>
 
@@ -254,8 +351,63 @@
 
     <div id="tab-panels">
 
+      <!-- ── Theory: textbook walkthrough ── -->
+      <div id="tab-theory" class="tab-panel">
+        <div id="theory-scroll">
+
+          <!-- § 1 — Ray Casting Setup -->
+          <section class="theory-section">
+            <div class="theory-section-heading">§ 1 &mdash; Ray Casting</div>
+            <div class="theory-row">
+              <div class="theory-canvas-wrap hero">
+                <canvas id="theory-canvas-setup"></canvas>
+                <span class="theory-canvas-hint">drag to orbit</span>
+              </div>
+              <div class="theory-equations" id="theory-eq-setup"></div>
+            </div>
+          </section>
+
+          <!-- § 2 — Sphere -->
+          <section class="theory-section">
+            <div class="theory-section-heading">§ 2 &mdash; 🔵 Sphere &mdash; Degree-2 Polynomial</div>
+            <div class="theory-row">
+              <div class="theory-canvas-wrap">
+                <canvas id="theory-canvas-sphere"></canvas>
+                <span class="theory-canvas-hint">drag to orbit</span>
+              </div>
+              <div class="theory-equations" id="theory-eq-sphere"></div>
+            </div>
+          </section>
+
+          <!-- § 3 — Cylinder -->
+          <section class="theory-section">
+            <div class="theory-section-heading">§ 3 &mdash; 🔷 Cylinder &mdash; Degree-2 Barrel + Caps</div>
+            <div class="theory-row">
+              <div class="theory-canvas-wrap">
+                <canvas id="theory-canvas-cylinder"></canvas>
+                <span class="theory-canvas-hint">drag to orbit</span>
+              </div>
+              <div class="theory-equations" id="theory-eq-cylinder"></div>
+            </div>
+          </section>
+
+          <!-- § 4 — Torus -->
+          <section class="theory-section">
+            <div class="theory-section-heading">§ 4 &mdash; 🍩 Torus &mdash; Degree-4 Polynomial</div>
+            <div class="theory-row">
+              <div class="theory-canvas-wrap">
+                <canvas id="theory-canvas-torus"></canvas>
+                <span class="theory-canvas-hint">drag to orbit</span>
+              </div>
+              <div class="theory-equations" id="theory-eq-torus"></div>
+            </div>
+          </section>
+
+        </div>
+      </div>
+
       <!-- ── Intuition: the original 3-D + graph view ── -->
-      <div id="tab-intuition" class="tab-panel">
+      <div id="tab-intuition" class="tab-panel" hidden>
         <div id="scene-container">
           <canvas id="scene-canvas"></canvas>
         </div>
@@ -294,19 +446,6 @@
             <div id="graph-subtitle">f(t) = 0 ⟹ ray hits sphere at parameter t</div>
             <canvas id="graph-canvas"></canvas>
           </div>
-        </div>
-      </div>
-
-      <!-- ── Math: LaTeX derivation (placeholder) ── -->
-      <div id="tab-math" class="tab-panel" hidden>
-        <div id="math-placeholder">
-          <h2>Math</h2>
-          <p>LaTeX-rendered derivation coming soon.</p>
-          <div class="eq">(x² + y² + z² + R² − r²)² = 4R²(x² + y²)</div>
-          <p>
-            Substituting p(t) = O + t D gives a degree-4 polynomial in t.<br>
-            Its real roots are the ray–torus intersection parameters.
-          </p>
         </div>
       </div>
 
