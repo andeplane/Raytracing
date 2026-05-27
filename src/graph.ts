@@ -47,16 +47,23 @@ export class PolynomialGraph {
       ts.push(t)
       fs.push(evalQuartic(coeffs, t))
     }
-    const fMin = Math.min(...fs)
-    const fMax = Math.max(...fs)
 
-    // ── Y range: true extremes + zero always visible ──────────────
-    const yLo  = Math.min(fMin, 0)
-    const yHi  = Math.max(fMax, 0)
-    const span = yHi - yLo || 1
-    const pad  = span * 0.07
-    const yMin = yLo - pad
-    const yMax = yHi + pad
+    // ── Y range: based on LOCAL extrema, not global endpoints ──────
+    // The quartic blows up at the edges (t→∞), which would dwarf the
+    // interesting region around the roots. Instead we scale to the
+    // local extrema (f′(t)=0 points) and always include 0.
+    // Fallback to global min/max only when no extrema exist.
+    const extrema = findExtrema(coeffs, ts)
+    const interestingYValues = [0, ...extrema.map(e => e.f)]
+    // Also include the value at each root (always 0, but keeps type happy)
+    const fMin = Math.min(...interestingYValues)
+    const fMax = Math.max(...interestingYValues)
+
+    const PADDING_FACTOR = 1.2
+    const yLo  = fMin < 0 ? fMin * PADDING_FACTOR : fMin / PADDING_FACTOR
+    const yHi  = fMax > 0 ? fMax * PADDING_FACTOR : fMax / PADDING_FACTOR
+    const yMin = yLo === yHi ? yLo - 1 : yLo
+    const yMax = yLo === yHi ? yHi + 1 : yHi
 
     // ── Coordinate helpers ────────────────────────────────────────
     const tToX = (t: number) => pL + ((t - tMin) / (tMax - tMin)) * pw
@@ -104,19 +111,6 @@ export class PolynomialGraph {
     ctx.stroke()
     ctx.setLineDash([])
 
-    // ── fMin / fMax horizontal guides ────────────────────────────
-    for (const [yv, col] of [[fMin, '#3a2a10'], [fMax, '#3a2a10']] as const) {
-      const cy = yToY(yv)
-      if (cy < pT - 2 || cy > pT + ph + 2) continue
-      ctx.strokeStyle = col
-      ctx.lineWidth = 1
-      ctx.setLineDash([2, 4])
-      ctx.beginPath()
-      ctx.moveTo(pL, cy); ctx.lineTo(pL + pw, cy)
-      ctx.stroke()
-      ctx.setLineDash([])
-    }
-
     // ── Polynomial curve ──────────────────────────────────────────
     ctx.beginPath()
     ctx.strokeStyle = '#7ec8e3'
@@ -133,7 +127,6 @@ export class PolynomialGraph {
     ctx.stroke()
 
     // ── Local extrema (diamonds) ──────────────────────────────────
-    const extrema = findExtrema(coeffs, ts)
     for (const { t, f } of extrema) {
       if (f < yMin || f > yMax) continue
       const cx = tToX(t), cy = yToY(f)
