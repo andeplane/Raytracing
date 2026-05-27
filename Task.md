@@ -1,312 +1,307 @@
-# Ray Tracing: Intersection Mathematics
-### A Hands-On Problem Set
+# Ray Tracing: Implement the Intersection Shaders
+### A Hands-On GLSL Coding Task
 
 ---
 
 ## Before You Start — Open the App
 
-This problem set comes with an interactive visualiser. Open it here:
+> **[https://andeplane.github.io/Raytracing](https://andeplane.github.io/Raytracing)**  
+> (or run locally: `npm install && npm run dev`)
 
-> **[https://github.com/andeplane/Raytracing](https://github.com/andeplane/Raytracing)**
-
-Follow the instructions on that page to run the app in your browser. Once it loads you will see three tabs:
+The app has three tabs:
 
 | Tab | What it does |
 |---|---|
-| **Theory** | Textbook-style walkthrough with 3D scenes you can orbit |
-| **Intuition** | Drag a ray across the near plane, watch the polynomial graph update in real time |
-| **Code** | Write your own GLSL shader; click ▶ RUN to render it |
+| **Theory** | Textbook-style walkthrough — read this first |
+| **Intuition** | Drag a ray, watch the polynomial graph update live |
+| **Code** | ← **Your workspace** — edit GLSL, click ▶ Run |
 
-The **Intuition** tab will be your main tool during this problem set. Try it now:
-
-1. Select **🔵 Sphere** from the geometry dropdown at the top.
-2. Click and drag on the **Near Plane** canvas (small 2D grid in the right panel) to aim the ray.
-3. Watch the **polynomial graph** on the right: the horizontal axis is the ray parameter $t$, the curve is the intersection equation $f(t)$. Green dots mark real roots — the actual hit points.
-4. Move the ray until it just grazes the sphere. What happens to the two roots?
-5. Move the ray so it misses completely. What happens to the curve?
+Switch to the **Code** tab. At the top-left, select a geometry from the dropdown. You will implement the missing functions for **Cylinder** and **Torus**.
 
 ---
 
-## Background — The Ray
+## How the Code Tab Works
 
-A **ray** is a half-line in 3D space:
+The editor contains a fragment shader that renders one geometric object.
+You only need to edit **three functions** (everything else is provided):
 
-$$\mathbf{P}(t) = \mathbf{O} + t\mathbf{D}, \qquad t \geq 0$$
+```glsl
+// 1. Implicit surface equation — F(p) = 0 on the surface, < 0 inside, > 0 outside
+float ObjectImplicit(vec3 p) { ... }
 
-- $\mathbf{O} = (O_x, O_y, O_z)$ — the **origin** (where the ray starts).
-- $\mathbf{D} = (D_x, D_y, D_z)$ — the **direction** (usually normalised so $|\mathbf{D}| = 1$).
-- $t$ — the **parameter**. At $t = 0$ you are at the origin; at $t = 1$ you are one unit along the ray.
+// 2. Outward unit normal at a surface point p
+vec3 ObjectNormal(vec3 p) { ... }
 
-The restriction $t \geq 0$ is essential: we only look *forward* along the ray. A root $t < 0$ would correspond to something *behind* the camera — physically real, but invisible.
+// 3. First positive ray–object intersection distance, or -1.0 on miss
+float RayObject(vec3 ro, vec3 rd) { ... }
+```
 
-> **Key idea.** Ray tracing turns a 3D visibility question into a 1D root-finding problem: given a ray and a surface, find the smallest positive $t$ such that $\mathbf{P}(t)$ lies on the surface.
+The **Sphere** shader is already complete — study it as your reference:
 
----
+```glsl
+// Sphere of radius R centred at the origin
+float ObjectImplicit(vec3 p) { return dot(p, p) - R * R; }
+vec3  ObjectNormal  (vec3 p) { return normalize(p); }
 
-## Part I — Sphere
+float RayObject(vec3 ro, vec3 rd) {
+    float a     = dot(rd, rd);
+    float halfB = dot(ro, rd);
+    float c     = dot(ro, ro) - R * R;
+    float disc  = halfB * halfB - a * c;
+    if (disc < 0.0) return -1.0;
+    float sqD = sqrt(disc);
+    float t0  = (-halfB - sqD) / a;
+    float t1  = (-halfB + sqD) / a;
+    if (t0 > 0.0001) return t0;
+    if (t1 > 0.0001) return t1;
+    return -1.0;
+}
+```
 
-### Theory
-
-A sphere with centre $\mathbf{C}$ and radius $R$ is the set of all points $\mathbf{X}$ satisfying:
-
-$$|\mathbf{X} - \mathbf{C}|^2 = R^2$$
-
-Substituting the ray $\mathbf{X} = \mathbf{O} + t\mathbf{D}$ and letting $\mathbf{L} = \mathbf{O} - \mathbf{C}$:
-
-$$|\mathbf{L} + t\mathbf{D}|^2 = R^2$$
-
-Expanding using the dot product:
-
-$$(\mathbf{D} \cdot \mathbf{D})\,t^2 + 2(\mathbf{L} \cdot \mathbf{D})\,t + (\mathbf{L} \cdot \mathbf{L} - R^2) = 0$$
-
-This is a **quadratic** $at^2 + bt + c = 0$ with:
-
-$$a = \mathbf{D} \cdot \mathbf{D}, \qquad b = 2(\mathbf{L} \cdot \mathbf{D}), \qquad c = |\mathbf{L}|^2 - R^2$$
-
-The discriminant $\Delta = b^2 - 4ac$ controls the geometry:
-
-| $\Delta$ | Geometric meaning |
-|---|---|
-| $\Delta < 0$ | ray misses the sphere entirely |
-| $\Delta = 0$ | ray is tangent — grazes the sphere at exactly one point |
-| $\Delta > 0$ | ray enters and exits — two distinct hit points |
-
-The two roots are:
-
-$$t = \frac{-b \pm \sqrt{\Delta}}{2a}$$
-
-The **visible** hit is the smallest root with $t > \varepsilon$ (a tiny threshold that prevents the ray from immediately re-intersecting the surface it just left).
-
-**Surface normal.** The sphere is an implicit surface $F(\mathbf{X}) = |\mathbf{X} - \mathbf{C}|^2 - R^2 = 0$. The normal direction is the gradient $\nabla F = 2(\mathbf{X} - \mathbf{C})$, so at a hit point $\mathbf{P}$:
-
-$$\hat{\mathbf{N}} = \frac{\mathbf{P} - \mathbf{C}}{|\mathbf{P} - \mathbf{C}|}$$
-
-The normal simply points outward from the centre — exactly as you would expect.
+Press **▶ Run** (or **Ctrl/Cmd + Enter**) after every edit to recompile. Compilation errors appear in red in the canvas.
 
 ---
 
-### Sphere Tasks
+## Part 1 — Cylinder
 
-**S1.** In the Intuition tab, set the geometry to **🔵 Sphere** and move the ray so it passes through the centre of the sphere. How many roots does the quadratic have, and what is their relationship to each other? (*Hint: think about symmetry.*)
+Select **🔷 Cylinder** from the dropdown. The canvas is black — nothing renders because all three functions are placeholders. Your job is to fix them.
 
-**S2.** The formula for $c$ is $|\mathbf{L}|^2 - R^2$, where $\mathbf{L} = \mathbf{O} - \mathbf{C}$.
+### Background
 
-- If $c < 0$, what does that say about where the ray origin is relative to the sphere?
-- What can you conclude about the number of *positive* roots in this case?
+An **infinite cylinder** with radius `R`, axis along the Y-axis, centred at the origin satisfies:
 
-**S3.** Suppose the ray direction $\mathbf{D}$ is already normalised ($|\mathbf{D}| = 1$). Show that $a = \mathbf{D} \cdot \mathbf{D} = 1$, and write a simplified version of the quadratic formula.
+$$p_x^2 + p_z^2 = R^2 \quad\Longrightarrow\quad F(\mathbf{p}) = p_x^2 + p_z^2 - R^2$$
 
-**S4. (Tangent condition)** A ray is tangent to the sphere if and only if $\Delta = 0$. In terms of $\mathbf{L}$ and $\mathbf{D}$, show that this means:
+Substituting the ray $\mathbf{P}(t) = \mathbf{O} + t\mathbf{D}$ and keeping only the X and Z components:
 
-$$(\mathbf{L} \cdot \mathbf{D})^2 = |\mathbf{L}|^2 - R^2$$
+$$\underbrace{(D_x^2 + D_z^2)}_{a}\,t^2 + \underbrace{2(O_x D_x + O_z D_z)}_{b}\,t + \underbrace{(O_x^2 + O_z^2 - R^2)}_{c} = 0$$
 
-Interpret each side geometrically. (*Hint: what is the projection of $\mathbf{L}$ onto $\mathbf{D}$?*)
+This is the same quadratic structure as the sphere — same solver, different $a, b, c$.
 
-**S5. (Normals and shading)** At a hit point $\mathbf{P}$, the surface normal is $\hat{\mathbf{N}} = (\mathbf{P} - \mathbf{C}) / R$. The simplest shading model colours a surface by $\max(0, \hat{\mathbf{N}} \cdot \hat{\mathbf{L}})$, where $\hat{\mathbf{L}}$ is the direction toward a light source. 
+The outward normal on the barrel is the radial direction away from the Y-axis:
+$$\hat{\mathbf{N}} = \text{normalize}(p_x,\; 0,\; p_z)$$
 
-- Why do we take the $\max$ with 0?
-- Why is the surface darkest at the silhouette (the outer edge of the sphere as seen by the camera)?
+### Tasks
 
----
+**C1. Implement `ObjectImplicit`**
 
-## Part II — Cylinder
+Fill in the barrel equation:
 
-Now it is your turn to derive the equations. We will do this in two stages: an infinite cylinder first, then a finite one with caps.
+```glsl
+float ObjectImplicit(vec3 p) {
+    return p.x*p.x + p.z*p.z - R*R;
+}
+```
 
-### Infinite Cylinder
+Hit ▶ Run. The canvas is still black — `RayObject` still returns `-1.0` — but no compile errors means you're on track.
 
-An **infinite cylinder** with axis along the $z$-axis and radius $R$ is the set of all points $(x, y, z)$ satisfying:
+**C2. Implement `ObjectNormal`**
 
-$$x^2 + y^2 = R^2$$
+```glsl
+vec3 ObjectNormal(vec3 p) {
+    return normalize(vec3(p.x, 0.0, p.z));
+}
+```
 
-More generally, a cylinder with axis through point $\mathbf{A}$ in direction $\hat{\mathbf{u}}$ (unit vector) is:
+Still black. Good.
 
-$$|\mathbf{X} - \mathbf{A} - [(\mathbf{X} - \mathbf{A}) \cdot \hat{\mathbf{u}}]\,\hat{\mathbf{u}}|^2 = R^2$$
+**C3. Implement `RayObject` for the infinite barrel**
 
-This says: the *component of* $(\mathbf{X} - \mathbf{A})$ *perpendicular to the axis* has magnitude $R$.
+Mirror the sphere solver, but use only the XZ components of `ro` and `rd`:
 
-**C1. (Derivation)** Substitute $\mathbf{X} = \mathbf{O} + t\mathbf{D}$ into the cylinder equation for an axis through the origin along $\hat{\mathbf{u}}$. Let $\mathbf{L} = \mathbf{O}$ (i.e., $\mathbf{A} = \mathbf{0}$) and define:
+```glsl
+float RayObject(vec3 ro, vec3 rd) {
+    float a     = rd.x*rd.x + rd.z*rd.z;
+    float halfB = ro.x*rd.x + ro.z*rd.z;
+    float c     = ro.x*ro.x + ro.z*ro.z - R*R;
+    float disc  = halfB*halfB - a*c;
+    if (disc < 0.0) return -1.0;
+    float sqD = sqrt(disc);
+    float t0  = (-halfB - sqD) / a;
+    float t1  = (-halfB + sqD) / a;
+    if (t0 > 0.0001) return t0;
+    if (t1 > 0.0001) return t1;
+    return -1.0;
+}
+```
 
-$$\mathbf{D}_\perp = \mathbf{D} - (\mathbf{D} \cdot \hat{\mathbf{u}})\,\hat{\mathbf{u}}, \qquad \mathbf{L}_\perp = \mathbf{L} - (\mathbf{L} \cdot \hat{\mathbf{u}})\,\hat{\mathbf{u}}$$
+Hit ▶ Run. You should see an **infinite cylinder** — a shaded tube stretching through the scene. Drag the canvas to orbit around it.
 
-Show that the ray-cylinder intersection reduces to a quadratic in $t$:
+**C4. Add finite caps (stretch goal)**
 
-$$at^2 + bt + c = 0$$
+To cap the cylinder at `y = ±H/2` (where `const float H = 3.0` is already in the shader), extend `RayObject`:
 
-and find explicit expressions for $a$, $b$, $c$ in terms of $\mathbf{D}_\perp$, $\mathbf{L}_\perp$, and $R$.
+1. After finding `t0`/`t1`, check that the hit point's Y coordinate is in `[-H/2, H/2]`. If not, discard that root.
+2. For each end cap (a disk at `y = ±H/2`):
+   - Find `t_cap` where the ray crosses that plane: `t_cap = (±H/2 - ro.y) / rd.y`
+   - Check the cap hit lies inside the disk: `length(ro.xz + t_cap * rd.xz) <= R`
+3. Return the smallest valid positive `t` among all candidates.
 
-(*Observe: this is the same degree as the sphere. Why? How are the two derivations structurally similar?*)
-
-**C2. (Normals)** For the infinite cylinder, the surface normal at a hit point $\mathbf{P}$ is the vector from the *axis* to $\mathbf{P}$, perpendicular to the axis. Write the formula for this normal using the axis direction $\hat{\mathbf{u}}$ and the hit point $\mathbf{P}$.
-
-**C3.** In the Intuition tab, switch to **🔷 Cylinder**. Aim the ray along the cylinder axis (so the ray travels parallel to the axis). What does the polynomial graph look like? Explain what happens algebraically — specifically, what value does $a = |\mathbf{D}_\perp|^2$ take in this case?
-
-**C4.** Now aim the ray so that it hits the cylinder at a very oblique angle (nearly tangent). What does the graph show? What happens to the two roots as the ray approaches a tangent configuration?
-
----
-
-### Finite Cylinder with Caps
-
-A real cylinder has finite length. A **finite cylinder** between $z = z_{\min}$ and $z = z_{\max}$ (for the axis-aligned case) requires two additional tests:
-
-1. **Lateral surface:** A root $t$ from the quadratic is valid only if the $z$-coordinate of the hit point satisfies $z_{\min} \leq P_z(t) \leq z_{\max}$.
-
-2. **End caps:** Each cap is a **disk** — a plane clipped to the circle $x^2 + y^2 \leq R^2$.
-
-**C5. (Cap intersection)** Derive the intersection of a ray with the disk at $z = z_{\max}$ (radius $R$, centred on the $z$-axis). In two steps:
-
-- First find the $t$ at which the ray crosses the plane $z = z_{\max}$ (a linear equation — why?).
-- Then test whether the hit point $(P_x, P_y)$ satisfies $P_x^2 + P_y^2 \leq R^2$.
-
-**C6.** A finite cylinder can produce up to **three** hits in total (two on the lateral surface, one on a cap — or similar combinations). Is it possible to have *exactly* three intersections? Draw a picture of a ray configuration that achieves this, or argue why it is or is not possible.
-
-**C7.** What is the surface normal on a flat end cap? Compare it to the normal on the lateral surface and explain geometrically why the two normals are perpendicular to each other.
-
----
-
-## Part III — Torus
-
-### Theory
-
-A **torus** is generated by revolving a circle of radius $r$ (the *tube radius*) around an axis at distance $R$ (the *major radius*). Centred at the origin, aligned around the $z$-axis:
-
-$$F(x,y,z) = \left(\sqrt{x^2 + y^2} - R\right)^2 + z^2 - r^2 = 0$$
-
-or equivalently (squaring to remove the square root):
-
-$$\boxed{\left(x^2 + y^2 + z^2 + R^2 - r^2\right)^2 = 4R^2(x^2 + y^2)}$$
-
-Switch to **🍩 Torus** in the app. Orbit the scene in the Theory tab to get a feeling for the shape. Then go to the Intuition tab and observe how the polynomial graph changes.
+> **Tip:** Use the **Intuition** tab (🔷 Cylinder selected) to see how the polynomial graph changes as you aim the ray at different parts of the cylinder — especially what happens when the ray is parallel to the axis.
 
 ---
 
-### Deriving the Quartic
+## Part 2 — Torus
 
-To intersect a ray with the torus, substitute $\mathbf{P}(t) = \mathbf{O} + t\mathbf{D}$ into the boxed equation above. Define the following scalar quantities:
+Select **🍩 Torus** from the dropdown. The torus is much harder: the ray intersection produces a **degree-4 (quartic)** polynomial.
 
-$$\alpha = \mathbf{D} \cdot \mathbf{D}, \qquad \beta = 2(\mathbf{O} \cdot \mathbf{D}), \qquad \gamma = \mathbf{O} \cdot \mathbf{O} + R^2 - r^2$$
+### Background
 
-$$\delta = D_x^2 + D_y^2, \qquad \varepsilon = 2(O_x D_x + O_y D_y), \qquad \zeta = O_x^2 + O_y^2$$
+A torus with major radius `MAJOR_R` (centre → tube centre) and minor radius `MINOR_R` (tube cross-section), centred at the origin, symmetric around the Y-axis:
 
-**T1. (Setting up the substitution)** Show that after substituting $\mathbf{P}(t) = \mathbf{O} + t\mathbf{D}$:
+$$F(\mathbf{p}) = \bigl(|\mathbf{p}|^2 + R^2 - r^2\bigr)^2 - 4R^2\bigl(p_x^2 + p_z^2\bigr) = 0$$
 
-$$x(t)^2 + y(t)^2 + z(t)^2 + R^2 - r^2 = \alpha t^2 + \beta t + \gamma$$
+where $R$ = `MAJOR_R`, $r$ = `MINOR_R`.
 
-$$x(t)^2 + y(t)^2 = \delta t^2 + \varepsilon t + \zeta$$
+Substituting $\mathbf{P}(t) = \mathbf{O} + t\mathbf{D}$ and expanding yields a quartic:
 
-(*Hint: just expand each sum and collect powers of $t$. The first one is $|\mathbf{P}(t)|^2 + R^2 - r^2$, so use the dot product.*)
+$$A t^4 + B t^3 + C t^2 + D t + E = 0$$
 
-**T2. (The quartic)** Using the results of T1, show that the torus equation becomes:
+Define the shorthand scalars:
 
-$$\left(\alpha t^2 + \beta t + \gamma\right)^2 - 4R^2\!\left(\delta t^2 + \varepsilon t + \zeta\right) = 0$$
+| Symbol | Value |
+|--------|-------|
+| $\alpha$ | `dot(rd, rd)` |
+| $\beta$ | `2 * dot(ro, rd)` |
+| $\gamma$ | `dot(ro, ro) + MAJOR_R² - MINOR_R²` |
+| $\delta$ | `rd.x² + rd.z²` |
+| $\varepsilon$ | `2*(ro.x*rd.x + ro.z*rd.z)` |
+| $\zeta$ | `ro.x² + ro.z²` |
 
-Now expand this and collect terms by powers of $t$. Show that the result is:
-
-$$At^4 + Bt^3 + Ct^2 + Dt + E = 0$$
-
-and derive the coefficients:
+Then the quartic coefficients are:
 
 $$A = \alpha^2, \quad B = 2\alpha\beta, \quad C = \beta^2 + 2\alpha\gamma - 4R^2\delta$$
 $$D = 2\beta\gamma - 4R^2\varepsilon, \quad E = \gamma^2 - 4R^2\zeta$$
 
-Check: which of $A, B, C, D, E$ can be zero, and what geometric situation does each zero correspond to?
+### Tasks
 
----
+**T1. Implement `ObjectImplicit`**
 
-### Thinking About Roots
+```glsl
+float ObjectImplicit(vec3 p) {
+    float s  = dot(p, p) + MAJOR_R*MAJOR_R - MINOR_R*MINOR_R;
+    float xz = p.x*p.x + p.z*p.z;
+    return s*s - 4.0*MAJOR_R*MAJOR_R*xz;
+}
+```
 
-A quartic equation has **four** roots in $\mathbb{C}$ (counting multiplicity), by the fundamental theorem of algebra. Not all of them are relevant — only real, positive roots correspond to actual ray-surface hits.
+**T2. Implement `ObjectNormal`**
 
-**T3. (Degree and geometry)** The torus equation $F(\mathbf{X}) = 0$ is degree **4** as a polynomial in $(x, y, z)$. Explain in one sentence why substituting a linear function $\mathbf{P}(t) = \mathbf{O} + t\mathbf{D}$ into a degree-$n$ polynomial always gives a polynomial of degree *at most* $n$ in $t$.
+The normal is $\nabla F$ evaluated at the hit point. Differentiating:
 
-Fill in the table:
+$$\frac{\partial F}{\partial p_x} = 4p_x\bigl(|\mathbf{p}|^2 + R^2 - r^2 - 2R^2\bigr), \quad
+  \frac{\partial F}{\partial p_y} = 4p_y\bigl(|\mathbf{p}|^2 + R^2 - r^2\bigr), \quad
+  \frac{\partial F}{\partial p_z} = 4p_z\bigl(|\mathbf{p}|^2 + R^2 - r^2 - 2R^2\bigr)$$
 
-| Surface | Implicit degree | Ray equation degree | Max hits |
-|---|---|---|---|
-| Plane | 1 | ? | ? |
-| Sphere | 2 | ? | ? |
-| Cylinder | 2 | ? | ? |
-| Torus | 4 | ? | ? |
+```glsl
+vec3 ObjectNormal(vec3 p) {
+    float s = dot(p, p) + MAJOR_R*MAJOR_R - MINOR_R*MINOR_R;
+    return normalize(vec3(
+        4.0*p.x*(s - 2.0*MAJOR_R*MAJOR_R),
+        4.0*p.y*s,
+        4.0*p.z*(s - 2.0*MAJOR_R*MAJOR_R)
+    ));
+}
+```
 
-**T4. (Complex roots)** Suppose the quartic $f(t) = 0$ has exactly two real roots and two complex roots. 
+**T3. Implement `RayObject` — step 1: compute the quartic coefficients**
 
-- What does this look like on the polynomial graph in the app?
-- In physical terms, what does a *complex* root of $f(t) = 0$ mean? (A complex $t$ would give a complex point $\mathbf{P}(t)$ — does that point lie on the torus? What does it represent geometrically?)
-- Complex roots of a real polynomial always come in **conjugate pairs** $a \pm bi$. Why? (*Hint: think about what happens when you substitute a complex number into a polynomial with real coefficients.*)
+```glsl
+float RayObject(vec3 ro, vec3 rd) {
+    float R  = MAJOR_R, r  = MINOR_R;
+    float R2 = R*R,     r2 = r*r;
 
-**T5. (Can there be exactly 3 real roots?)** 
+    float alpha   = dot(rd, rd);
+    float beta    = 2.0 * dot(ro, rd);
+    float gamma   = dot(ro, ro) + R2 - r2;
+    float delta   = rd.x*rd.x + rd.z*rd.z;
+    float epsilon = 2.0*(ro.x*rd.x + ro.z*rd.z);
+    float zeta    = ro.x*ro.x + ro.z*ro.z;
 
-The quartic $f(t)$ has real coefficients. Consider the claim: *"A ray can hit the torus in exactly 3 points."*
+    float A = alpha*alpha;
+    float B = 2.0*alpha*beta;
+    float C = beta*beta  + 2.0*alpha*gamma - 4.0*R2*delta;
+    float D = 2.0*beta*gamma               - 4.0*R2*epsilon;
+    float E = gamma*gamma                  - 4.0*R2*zeta;
 
-- If $f$ has a **repeated real root**, is that consistent with three distinct intersections? What does a repeated root mean geometrically (think about the graph touching the $t$-axis)?
-- Using the fact that complex roots of real polynomials come in conjugate pairs, what are the *only* possible numbers of real roots of a degree-4 polynomial with real coefficients?
-- Conclude: can a ray have exactly 3 genuine (distinct, positive) intersections with a torus? Why or why not?
+    // TODO next: solve At⁴ + Bt³ + Ct² + Dt + E = 0
+    return -1.0;
+}
+```
 
-**T6. (Maximum hits)** 
+Hit ▶ Run — still black, but no compile errors means the coefficients are ready.
 
-- In the Intuition tab, find a ray configuration with **4 green dots** on the graph. Describe the geometry: where is the ray relative to the torus?
-- Now find a configuration with **2 green dots**, and one with **0 green dots**.
-- Can you find a configuration with exactly **1 green dot** that is *not* a repeated root (i.e., the curve crosses the axis, not just touches it)? Think carefully about what this would require.
+**T4. Implement `RayObject` — step 2: solve the quartic**
 
-**T7. (The normal on a torus)**
+Because the quartic has real coefficients, use a **scan + bisect** strategy:
 
-For the torus $F(x,y,z) = (x^2 + y^2 + z^2 + R^2 - r^2)^2 - 4R^2(x^2 + y^2) = 0$, the surface normal is $\nabla F$.
+1. **Sample the polynomial** at `N` evenly-spaced values of `t` in `[0.001, 20.0]`.  
+   Evaluate $f(t) = At^4 + Bt^3 + Ct^2 + Dt + E$ using Horner's method:
+   ```glsl
+   float evalQuartic(float A, float B, float C, float D, float E, float t) {
+       return ((((A*t) + B)*t + C)*t + D)*t + E;
+   }
+   ```
 
-Compute $\nabla F = \left(\frac{\partial F}{\partial x}, \frac{\partial F}{\partial y}, \frac{\partial F}{\partial z}\right)$ at a hit point $\mathbf{P} = (P_x, P_y, P_z)$ and simplify.
+2. **Detect sign changes.** When `f(t_i)` and `f(t_{i+1})` differ in sign, there is a root in that interval.
 
-(*Hint: let $s = P_x^2 + P_y^2 + P_z^2 + R^2 - r^2$ and $q = P_x^2 + P_y^2$. You can express the answer neatly in terms of $s$ and $q$.*)
+3. **Bisect to refine** — run ~8 iterations to narrow the bracket.
 
-**T8. (Solving the quartic — a numerical challenge)**
+4. **Return the smallest positive root found.**
 
-Unlike the quadratic formula (degree 2) or even the cubic formula (degree 3, which exists but is complicated), solving a general quartic by hand is extremely tedious. However, because $f(t)$ has real coefficients and we only need real roots, numerical methods work very well.
+```glsl
+// Replace "return -1.0;" above with:
+float tMin = 0.001, tMax = 20.0;
+int   N    = 64;
+float dt   = (tMax - tMin) / float(N);
+float best = -1.0;
 
-One approach: **bisection and Newton's method.** Given that $f(t)$ is a smooth function, describe (in words or pseudocode) how you would:
+float fPrev = evalQuartic(A,B,C,D,E, tMin);
+for (int i = 1; i <= N; i++) {
+    float t1 = tMin + float(i)*dt;
+    float f1 = evalQuartic(A,B,C,D,E, t1);
+    if (fPrev * f1 < 0.0) {
+        float lo = t1 - dt, hi = t1;
+        for (int j = 0; j < 8; j++) {
+            float mid = 0.5*(lo + hi);
+            if (evalQuartic(A,B,C,D,E, mid) * fPrev < 0.0) hi = mid;
+            else lo = mid;
+        }
+        float root = 0.5*(lo + hi);
+        if (root > 0.0001 && (best < 0.0 || root < best)) best = root;
+    }
+    fPrev = f1;
+}
+return best;
+```
 
-1. Find an interval $[t_{\min}, t_{\max}]$ that is guaranteed to contain all positive real roots.
-2. Use the *derivative* $f'(t)$ to find the local extrema of $f(t)$, splitting the real line into monotone pieces.
-3. Apply bisection or Newton iteration on each monotone piece to locate each root.
+Hit ▶ Run. If everything is correct you should see a **shaded torus** in the canvas. Drag to orbit. 🍩
 
-*(You do not need to implement this — just describe the strategy.)*
+**T5. Quality and performance (stretch goals)**
 
----
+Once the torus renders correctly, experiment:
 
-## Bonus Problems
-
-**B1. (Bounding box test)** Before testing a ray against a complex shape like a torus, renderers first test the ray against a simple **axis-aligned bounding box** (AABB). For the torus with major radius $R$ and tube radius $r$:
-
-- What is the smallest axis-aligned box that contains the entire torus?
-- The AABB test for a ray $\mathbf{P}(t) = \mathbf{O} + t\mathbf{D}$ uses three slab inequalities: $x_{\min} \leq O_x + tD_x \leq x_{\max}$, and similarly for $y$ and $z$. Show that each slab gives an interval $[t_a, t_b]$, and the ray hits the box iff these three intervals share a common point. Derive the formula for the interval intersection.
-- Why is this test worth doing, even though it only gives a conservative bound?
-
-**B2. (Self-intersecting torus)** What happens if $r > R$ — does the formula still make sense? Explore in the app. Does the equation $F(\mathbf{X}) = 0$ still describe a smooth surface, or does something singular happen? Can you find the singular set?
-
-**B3. (Shadows)** A **shadow ray** starts at a surface hit point $\mathbf{P}$ and travels toward a light source $\mathbf{L}_\text{pos}$. Explain why:
-
-1. The shadow ray must be offset by $\varepsilon\hat{\mathbf{N}}$ from the hit point.
-2. Only roots satisfying $0 < t < |\mathbf{L}_\text{pos} - \mathbf{P}|$ count as blockers.
-
-What would go wrong in practice if either condition were omitted?
-
-**B4. (Reflection)** Given an incoming ray direction $\mathbf{I}$ (pointing *toward* the surface) and a unit normal $\hat{\mathbf{N}}$, derive the formula for the reflected direction:
-
-$$\mathbf{R} = \mathbf{I} - 2(\mathbf{I} \cdot \hat{\mathbf{N}})\hat{\mathbf{N}}$$
-
-from first principles. Verify that $|\mathbf{R}| = |\mathbf{I}|$ (reflection preserves speed) and that the angle of incidence equals the angle of reflection.
-
-**B5. (Code challenge)** Open the **Code** tab. The editor contains a working GLSL shader that renders the torus. Try modifying `ObjectImplicit()` to render a different shape — for example, two spheres (the union of two spheres is a piecewise-quadratic intersection). You can take the minimum of two $f(t)$ values. What visual result do you get?
+- **Increase N** (e.g. 128, 256) — does image quality improve at grazing angles?
+- **Decrease N** (e.g. 16) — where do artifacts first appear?
+- **Replace bisection with Newton's method**: `t ← t - f(t)/f'(t)` where $f'(t) = 4At^3 + 3Bt^2 + 2Ct + D$. Does it converge in fewer iterations?
+- **Analytic solver:** Implement Neumark's or Ferrari's quartic formula and compare speed and precision.
 
 ---
 
 ## Summary
 
-| Shape | Equation | Ray intersect degree | Formula |
+| Shape | `ObjectImplicit` | Intersection degree | Normal |
 |---|---|---|---|
-| Sphere | $\|\mathbf{X}-\mathbf{C}\|^2 = R^2$ | Quadratic | $\Delta = b^2 - 4ac$ |
-| Cylinder | $\|\mathbf{X}_\perp\|^2 = R^2$ | Quadratic | $\Delta = b^2 - 4ac$ |
-| Torus | $(x^2+y^2+z^2+R^2-r^2)^2 = 4R^2(x^2+y^2)$ | **Quartic** | Must solve $At^4+Bt^3+Ct^2+Dt+E=0$ |
+| Sphere | `dot(p,p) - R²` | Quadratic | `normalize(p)` |
+| Cylinder | `p.x²+p.z² - R²` | Quadratic | `normalize(p.x, 0, p.z)` |
+| Torus | `(|p|²+R²-r²)² - 4R²(p.x²+p.z²)` | **Quartic** | `∇F / |∇F|` |
 
-The central pattern throughout is:
+The central pattern:
 
-> **Implicit surface** $F(\mathbf{X}) = 0$ $\;\longrightarrow\;$ substitute the ray $\;\longrightarrow\;$ polynomial $f(t) = 0$ $\;\longrightarrow\;$ find smallest positive root.
+> **Implicit surface** $F(\mathbf{p}) = 0$  
+> $\longrightarrow$ substitute the ray $\mathbf{P}(t) = \mathbf{O} + t\mathbf{D}$  
+> $\longrightarrow$ polynomial $f(t) = 0$  
+> $\longrightarrow$ find smallest positive root  
+> $\longrightarrow$ evaluate normal $= \nabla F$ at the hit point
 
 Good luck — and enjoy the shapes!
