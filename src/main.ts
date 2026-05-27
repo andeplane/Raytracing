@@ -2,16 +2,19 @@
  * Main entry point — wires together the 3D scene, polynomial graph,
  * near-plane view, slider controls, and tab navigation.
  */
-import { Scene3D, type SceneParams } from './scene3d'
+import { Scene3D, type SceneParams, type GeometryMode } from './scene3d'
 import { PolynomialGraph } from './graph'
 import { NearPlaneView } from './nearPlane'
 import { quarticCoeffs, findRoots } from './torusMath'
 import type { QuarticCoeffs } from './torusMath'
 import { CodeView } from './codeView'
+import { sphereCoeffs } from './sphereMath'
+import { cylinderBarrelCoeffs, cylinderHits, CYLINDER_HEIGHT } from './cylinderMath'
 
 // ── State ──────────────────────────────────────────────────────────────────
 // eyeZ and nearDist are fixed — not exposed in UI but used internally.
 const params: SceneParams = {
+  geometryMode: 'sphere',
   majorR: 2.0,
   minorR: 0.5,
   eyeZ: 6.0,
@@ -32,20 +35,70 @@ scene3d.onGizmoChange(() => updateAll())
 const polyGraph = new PolynomialGraph(graphCanvas)
 const nearView  = new NearPlaneView(nearPlaneCanvas)
 
+// ── Geometry metadata ──────────────────────────────────────────────────────
+const GEOMETRY_META: Record<GeometryMode, {
+  title: string; graphLabel: string; subtitle: string; majorLabel: string; showMinorR: boolean
+}> = {
+  sphere: {
+    title: '🔵 Ray–Sphere Intersection',
+    graphLabel: 'Quadratic f(t)',
+    subtitle: 'f(t) = 0 ⟹ ray hits sphere at parameter t',
+    majorLabel: 'Radius R',
+    showMinorR: false,
+  },
+  cylinder: {
+    title: '🔷 Ray–Cylinder Intersection',
+    graphLabel: 'Quadratic f(t)',
+    subtitle: 'f(t) = 0 ⟹ ray hits cylinder barrel at parameter t',
+    majorLabel: 'Radius R',
+    showMinorR: false,
+  },
+  torus: {
+    title: '🍩 Ray–Torus Intersection',
+    graphLabel: 'Quartic f(t)',
+    subtitle: 'f(t) = 0 ⟹ ray hits torus at parameter t',
+    majorLabel: 'Major radius R',
+    showMinorR: true,
+  },
+}
+
+// ── Apply geometry mode (updates DOM + rerenders) ──────────────────────────
+function applyGeometryMode() {
+  const meta = GEOMETRY_META[params.geometryMode]
+  document.getElementById('scene-title')!.textContent = meta.title
+  document.getElementById('graph-title')!.textContent = meta.graphLabel
+  document.getElementById('graph-subtitle')!.textContent = meta.subtitle
+  document.getElementById('label-majorR')!.textContent = meta.majorLabel
+  document.getElementById('ctrl-row-minorR')!.style.display = meta.showMinorR ? '' : 'none'
+  updateAll()
+}
+
 // ── Main update ────────────────────────────────────────────────────────────
 function updateAll() {
   scene3d.update(params)
 
   const { eyePos, rayDir, O_v, D_v } = scene3d.getRayInfo()
+  const tMin = 0.001
+  const tMax = params.eyeZ + 20
 
-  const coeffs: QuarticCoeffs = quarticCoeffs(O_v, D_v, params.majorR, params.minorR)
-  const roots = findRoots(coeffs, 0.001, params.eyeZ + 20)
-  const positiveRoots = roots.filter(t => t > 0)
+  let coeffs: QuarticCoeffs
+  let positiveRoots: number[]
+
+  if (params.geometryMode === 'sphere') {
+    coeffs = sphereCoeffs(O_v, D_v, params.majorR)
+    positiveRoots = findRoots(coeffs, tMin, tMax).filter(t => t > 0)
+  } else if (params.geometryMode === 'cylinder') {
+    coeffs = cylinderBarrelCoeffs(O_v, D_v, params.majorR)
+    positiveRoots = cylinderHits(O_v, D_v, params.majorR, CYLINDER_HEIGHT, tMin, tMax).filter(t => t > 0)
+  } else {
+    coeffs = quarticCoeffs(O_v, D_v, params.majorR, params.minorR)
+    positiveRoots = findRoots(coeffs, tMin, tMax).filter(t => t > 0)
+  }
 
   scene3d.setHits(positiveRoots, eyePos, rayDir)
 
-  const tMax = Math.max(params.eyeZ + 12, 20)
-  polyGraph.draw(coeffs, positiveRoots, 0.001, tMax)
+  const graphMax = Math.max(params.eyeZ + 12, 20)
+  polyGraph.draw(coeffs, positiveRoots, tMin, graphMax)
   nearView.draw()
 
   if (positiveRoots.length > 0) {
@@ -87,6 +140,14 @@ nearView.onChange((x, y) => {
   updateAll()
 })
 
+// ── Geometry dropdown ──────────────────────────────────────────────────────
+const geoSelect = document.getElementById('geometry-select') as HTMLSelectElement
+geoSelect.value = params.geometryMode
+geoSelect.addEventListener('change', () => {
+  params.geometryMode = geoSelect.value as GeometryMode
+  applyGeometryMode()
+})
+
 // ── Bind sliders ───────────────────────────────────────────────────────────
 const fix2 = (v: number) => v.toFixed(2)
 
@@ -101,7 +162,7 @@ resizeObs.observe(graphCanvas)
 resizeObs.observe(nearPlaneCanvas)
 
 // ── Initial render ─────────────────────────────────────────────────────────
-updateAll()
+applyGeometryMode()
 
 // ── Tab navigation ─────────────────────────────────────────────────────────
 let codeView: CodeView | null = null

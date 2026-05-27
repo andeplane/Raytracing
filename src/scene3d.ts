@@ -1,18 +1,28 @@
 /**
- * Three.js 3D scene for ray-torus intersection visualization.
+ * Three.js 3D scene for ray–geometry intersection visualization.
  *
  * Coordinate convention:
- *   - Torus centred at origin, axis along Y, in XZ plane.
+ *   - Object centred at origin; gizmo can translate/rotate it freely.
  *   - Eye at (0, 0, eyeZ) looking toward -Z.
  *   - Near plane at z = eyeZ - nearDist.
  *   - Ray goes from eye through (rayX, rayY) on near plane.
+ *
+ * Local-frame geometry axes (mesh's own coordinate space):
+ *   - Sphere  : isotropic, any frame fine.
+ *   - Cylinder: axis = Y, barrel equation x² + z² = r².
+ *   - Torus   : axis = Z, ring in XY plane; starts with rotation.x = π/2 so it
+ *               lies flat in world space, but local frame stays axis=Z for math.
  */
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { TransformControls } from 'three/addons/controls/TransformControls.js'
 import type { Vec3 } from './torusMath'
+import { CYLINDER_HEIGHT } from './cylinderMath'
+
+export type GeometryMode = 'sphere' | 'cylinder' | 'torus'
 
 export interface SceneParams {
+  geometryMode: GeometryMode
   majorR: number
   minorR: number
   eyeZ: number
@@ -27,8 +37,7 @@ export class Scene3D {
   private camera: THREE.PerspectiveCamera
   private controls: OrbitControls
 
-  private torusMesh!: THREE.Mesh
-  private torusWire!: THREE.Mesh
+  private shapeMesh!: THREE.Mesh
   private eyeSphere!: THREE.Mesh
   private nearPlaneMesh!: THREE.Mesh
   private frustumLines!: THREE.Line
@@ -40,9 +49,10 @@ export class Scene3D {
   private tcRotate!: TransformControls
   private onGizmoChangeCallback: (() => void) | null = null
   private _gizmoDragging = false
-  private _torusSelected = false
+  private _shapeSelected = false
   private _lastMajorR = NaN
   private _lastMinorR = NaN
+  private _lastGeometryMode: GeometryMode | null = null
 
   private params: SceneParams
 
@@ -126,29 +136,53 @@ export class Scene3D {
     this.scene.add(new THREE.AxesHelper(1.5))
   }
 
+  /** Create geometry for the current mode. */
+  private makeShapeGeo(p: SceneParams, detail: 'high' | 'low'): THREE.BufferGeometry {
+    if (p.geometryMode === 'sphere') {
+      return detail === 'high'
+        ? new THREE.SphereGeometry(p.majorR, 64, 32)
+        : new THREE.SphereGeometry(p.majorR, 16, 8)
+    } else if (p.geometryMode === 'cylinder') {
+      // Three.js CylinderGeometry axis = Y — matches cylinderMath.ts local frame
+      return detail === 'high'
+        ? new THREE.CylinderGeometry(p.majorR, p.majorR, CYLINDER_HEIGHT, 64)
+        : new THREE.CylinderGeometry(p.majorR, p.majorR, CYLINDER_HEIGHT, 16)
+    } else {
+      // Torus: Three.js default is XY plane (axis=Z) — matches torusMath.ts
+      return detail === 'high'
+        ? new THREE.TorusGeometry(p.majorR, p.minorR, 80, 160)
+        : new THREE.TorusGeometry(p.majorR, p.minorR, 16, 48)
+    }
+  }
+
+  /** Default world rotation for each geometry mode. */
+  private applyDefaultRotation(p: SceneParams) {
+    this.shapeMesh.rotation.set(0, 0, 0)
+    if (p.geometryMode === 'torus') {
+      this.shapeMesh.rotation.x = Math.PI / 2  // torus lies flat (axis=Y in world) by default
+    }
+    // cylinder and sphere: no initial rotation needed
+  }
+
   private buildObjects() {
     const p = this.params
 
-    // ── Torus (axis=Y, XZ plane) ─────────────────────────────────
-    // Three.js TorusGeometry default: in XY plane, axis=Z
-    // Rotate X by +PI/2 → axis=Y, XZ plane
-    const torusGeo = new THREE.TorusGeometry(p.majorR, p.minorR, 80, 160)
-    const torusMat = new THREE.MeshStandardMaterial({
+    // ── Shape mesh + wireframe (wire is a child → inherits all transforms) ───
+    const shapeMat = new THREE.MeshStandardMaterial({
       color: 0x5bb8d4,
       emissive: 0x1a4a5a,
       roughness: 0.85,
       metalness: 0.0,
     })
-    this.torusMesh = new THREE.Mesh(torusGeo, torusMat)
-    this.torusMesh.castShadow = true
-    this.torusMesh.receiveShadow = true
-    this.torusMesh.rotation.x = Math.PI / 2  // torus lies flat (axis=Y) by default
-    this.scene.add(this.torusMesh)
+    this.shapeMesh = new THREE.Mesh(this.makeShapeGeo(p, 'high'), shapeMat)
+    this.shapeMesh.castShadow = true
+    this.shapeMesh.receiveShadow = true
+    this.applyDefaultRotation(p)
+    this.scene.add(this.shapeMesh)
 
-    const wireGeo = new THREE.TorusGeometry(p.majorR, p.minorR, 16, 48)
     const wireMat = new THREE.MeshBasicMaterial({ color: 0x2a6a88, wireframe: true, opacity: 0.08, transparent: true })
-    this.torusWire = new THREE.Mesh(wireGeo, wireMat)
-    this.torusMesh.add(this.torusWire)  // child of torusMesh — inherits all transforms
+    const shapeWire = new THREE.Mesh(this.makeShapeGeo(p, 'low'), wireMat)
+    this.shapeMesh.add(shapeWire)  // child of shapeMesh — inherits all transforms
 
     // ── Eye sphere ────────────────────────────────────────────────
     const eyeGeo = new THREE.SphereGeometry(0.14, 20, 20)
@@ -219,7 +253,6 @@ export class Scene3D {
     const corners = [
       [-hw, -hh, nearZ], [hw, -hh, nearZ], [hw, hh, nearZ], [-hw, hh, nearZ],
     ] as const
-    // Rebuild frustum geometry as LineSegments (4 eye→corner segments)
     const fpts = new Float32Array(4 * 2 * 3)
     for (let i = 0; i < 4; i++) {
       const c = corners[i]
@@ -231,17 +264,24 @@ export class Scene3D {
     newFGeo.setAttribute('position', new THREE.BufferAttribute(fpts, 3))
     this.frustumLines.geometry = newFGeo
 
-    // Torus geometry — only rebuild when radii change (preserves gizmo transform)
-    if (p.majorR !== this._lastMajorR || p.minorR !== this._lastMinorR) {
-      this.torusMesh.geometry.dispose()
-      this.torusMesh.geometry = new THREE.TorusGeometry(p.majorR, p.minorR, 80, 160)
-      const wire = this.torusMesh.children[0] as THREE.Mesh
+    // Shape geometry — only rebuild when radii/mode change (preserves gizmo transform)
+    if (p.geometryMode !== this._lastGeometryMode) {
+      // Mode switched: reset position + rotation to sensible default, deselect
+      this.shapeMesh.position.set(0, 0, 0)
+      this.applyDefaultRotation(p)
+      this._deselectShape()
+    }
+    if (p.majorR !== this._lastMajorR || p.minorR !== this._lastMinorR || p.geometryMode !== this._lastGeometryMode) {
+      this.shapeMesh.geometry.dispose()
+      this.shapeMesh.geometry = this.makeShapeGeo(p, 'high')
+      const wire = this.shapeMesh.children[0] as THREE.Mesh
       wire.geometry.dispose()
-      wire.geometry = new THREE.TorusGeometry(p.majorR, p.minorR, 16, 48)
+      wire.geometry = this.makeShapeGeo(p, 'low')
       this._lastMajorR = p.majorR
       this._lastMinorR = p.minorR
+      this._lastGeometryMode = p.geometryMode
     }
-    // torusWire transform is driven by torusMesh parent — no manual sync needed
+    // Wire transform is driven by shapeMesh parent — no manual sync needed
 
     // Ray (initial: eye → far)
     const farPt = eyePos.clone().addScaledVector(rayDir, 16)
@@ -301,7 +341,7 @@ export class Scene3D {
     }
   }
 
-  /** Compute ray in torus local frame (for math). */
+  /** Compute ray in shape local frame using the mesh's actual world transform. */
   getRayInfo(): { eyePos: THREE.Vector3; rayDir: THREE.Vector3; O_v: Vec3; D_v: Vec3 } {
     const p = this.params
     const eyePos = new THREE.Vector3(0, 0, p.eyeZ)
@@ -309,12 +349,12 @@ export class Scene3D {
     const hitOnNear = new THREE.Vector3(p.rayX, p.rayY, nearZ)
     const rayDir = hitOnNear.clone().sub(eyePos).normalize()
 
-    // Transform ray into torus local frame using the mesh's actual world transform.
-    // Handles arbitrary position and rotation applied by the gizmo.
-    const torusPos = this.torusMesh.position
-    const qInv = this.torusMesh.quaternion.clone().invert()
+    // Transform ray into shape local frame using the mesh's actual position + quaternion.
+    // This handles arbitrary gizmo-applied translations and rotations correctly.
+    const shapePos = this.shapeMesh.position
+    const qInv = this.shapeMesh.quaternion.clone().invert()
 
-    const O_local = eyePos.clone().sub(torusPos).applyQuaternion(qInv)
+    const O_local = eyePos.clone().sub(shapePos).applyQuaternion(qInv)
     const D_local = rayDir.clone().applyQuaternion(qInv)
 
     return {
@@ -325,7 +365,7 @@ export class Scene3D {
     }
   }
 
-  /** Register a callback that fires whenever the gizmo transforms the torus. */
+  /** Register a callback that fires whenever the gizmo transforms the shape. */
   onGizmoChange(cb: () => void): void {
     this.onGizmoChangeCallback = cb
   }
@@ -342,28 +382,28 @@ export class Scene3D {
     ray.setFromCamera(ndc, this.camera)
 
     // recursive=false so we don't hit the wireframe child
-    const hits = ray.intersectObject(this.torusMesh, false)
+    const hits = ray.intersectObject(this.shapeMesh, false)
     if (hits.length > 0) {
-      this._selectTorus()
+      this._selectShape()
     } else {
-      this._deselectTorus()
+      this._deselectShape()
     }
   }
 
-  private _selectTorus() {
-    if (this._torusSelected) return
-    this._torusSelected = true
-    this.tcTranslate.attach(this.torusMesh)
-    this.tcRotate.attach(this.torusMesh)
-    ;(this.torusMesh.material as THREE.MeshStandardMaterial).emissive.setHex(0x2a6a7a)
+  private _selectShape() {
+    if (this._shapeSelected) return
+    this._shapeSelected = true
+    this.tcTranslate.attach(this.shapeMesh)
+    this.tcRotate.attach(this.shapeMesh)
+    ;(this.shapeMesh.material as THREE.MeshStandardMaterial).emissive.setHex(0x2a6a7a)
   }
 
-  private _deselectTorus() {
-    if (!this._torusSelected) return
-    this._torusSelected = false
+  private _deselectShape() {
+    if (!this._shapeSelected) return
+    this._shapeSelected = false
     this.tcTranslate.detach()
     this.tcRotate.detach()
-    ;(this.torusMesh.material as THREE.MeshStandardMaterial).emissive.setHex(0x1a4a5a)
+    ;(this.shapeMesh.material as THREE.MeshStandardMaterial).emissive.setHex(0x1a4a5a)
   }
 
   update(params: Partial<SceneParams>) {

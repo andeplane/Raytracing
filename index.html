@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Torus Ray Intersection</title>
+    <title>Ray Intersection</title>
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
       body {
@@ -29,6 +29,13 @@
         flex-shrink: 0;
       }
       #header h1 { font-size: 14px; font-weight: bold; }
+      #geometry-select {
+        background: #0d0d1f; color: #7ec8e3;
+        border: 1px solid #444; padding: 3px 8px;
+        font-family: 'Courier New', monospace; font-size: 12px;
+        cursor: pointer; border-radius: 3px; outline: none;
+      }
+      #geometry-select:hover { border-color: #7ec8e3; }
       #root-info { margin-left: auto; font-size: 12px; color: #aaa; }
       #root-info .hit  { color: #4ecca3; }
       #root-info .miss { color: #ff6b6b; }
@@ -228,8 +235,13 @@
   </head>
   <body>
     <div id="header">
-      <h1>🍩 Ray–Torus Intersection</h1>
-      <span style="color:#555;font-size:11px">drag near-plane · orbit 3D · click torus to transform</span>
+      <h1 id="scene-title">🔵 Ray–Sphere Intersection</h1>
+      <select id="geometry-select">
+        <option value="sphere">🔵 Sphere</option>
+        <option value="cylinder">🔷 Cylinder</option>
+        <option value="torus">🍩 Torus</option>
+      </select>
+      <span style="color:#555;font-size:11px">drag near-plane · orbit 3D · click shape to transform</span>
 
       <div id="tab-nav">
         <button class="tab-btn" data-tab="intuition" aria-selected="true">Intuition</button>
@@ -251,11 +263,11 @@
           <div id="controls-panel">
             <h2>Parameters</h2>
             <div class="ctrl-row">
-              <label>Major radius R</label>
+              <label id="label-majorR">Radius R</label>
               <input type="range" id="ctrl-R" min="0.5" max="3.5" step="0.05" value="2">
               <span class="val" id="val-R">2.00</span>
             </div>
-            <div class="ctrl-row">
+            <div class="ctrl-row" id="ctrl-row-minorR" style="display:none">
               <label>Minor radius r</label>
               <input type="range" id="ctrl-r" min="0.05" max="1.5" step="0.05" value="0.5">
               <span class="val" id="val-r">0.50</span>
@@ -278,8 +290,8 @@
           </div>
 
           <div id="graph-wrap">
-            <h2>Quartic f(t)</h2>
-            <div id="graph-subtitle">f(t) = 0 ⟹ ray hits torus at parameter t</div>
+            <h2 id="graph-title">Quadratic f(t)</h2>
+            <div id="graph-subtitle">f(t) = 0 ⟹ ray hits sphere at parameter t</div>
             <canvas id="graph-canvas"></canvas>
           </div>
         </div>
