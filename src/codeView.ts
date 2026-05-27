@@ -360,7 +360,10 @@ interface UniformLocs {
 
 // ── localStorage helpers ──────────────────────────────────────────────────────
 
-const LS_KEY = (geo: ShaderGeometry) => `glsl-shader-${geo}`
+// Bump this when the built-in shaders change incompatibly — it invalidates
+// all previously cached user saves so stale shaders don't get loaded.
+const LS_VERSION = 'v3'
+const LS_KEY = (geo: ShaderGeometry) => `glsl-shader-${LS_VERSION}-${geo}`
 
 function lsLoad(geo: ShaderGeometry): string | null {
   try { return localStorage.getItem(LS_KEY(geo)) } catch { return null }
