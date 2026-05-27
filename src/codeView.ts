@@ -136,12 +136,9 @@ float RayObject(vec3 ro, vec3 rd) {
     return -1.0;
 }
 
-// Procedural surface colour — latitude/longitude stripe pattern.
+// Surface colour — clean solid white/blue tint.
 vec3 shadeSurface(vec3 p) {
-    float lat = atan(p.y, length(p.xz));
-    float lon = atan(p.z, p.x);
-    float pat = 0.5 + 0.5 * cos(8.0 * lat + 6.0 * lon);
-    return vec3(0.80, 0.88, 1.0) * mix(0.65, 1.15, pat);
+    return vec3(0.85, 0.90, 1.0);
 }
 ` + SHADER_TAIL;
 
