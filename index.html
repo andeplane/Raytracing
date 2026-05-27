@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Torus Ray Intersection</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body {
+        background: #0d0d0d;
+        color: #e0e0e0;
+        font-family: 'Courier New', monospace;
+        overflow: hidden;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+      #header {
+        padding: 8px 16px;
+        background: #1a1a2e;
+        border-bottom: 1px solid #333;
+        font-size: 13px;
+        color: #7ec8e3;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        flex-shrink: 0;
+      }
+      #header h1 { font-size: 14px; font-weight: bold; }
+      #root-info { margin-left: auto; font-size: 12px; color: #aaa; }
+      #root-info .hit { color: #4ecca3; }
+      #root-info .miss { color: #ff6b6b; }
+      #main { display: flex; flex: 1; overflow: hidden; }
+      #scene-container { flex: 1; position: relative; border-right: 1px solid #333; }
+      #scene-canvas { width: 100%; height: 100%; display: block; }
+      #right-panel {
+        width: 380px;
+        display: flex;
+        flex-direction: column;
+        background: #111;
+        flex-shrink: 0;
+      }
+      #controls-panel { padding: 14px; border-bottom: 1px solid #333; flex-shrink: 0; }
+      #controls-panel h2 {
+        font-size: 11px; text-transform: uppercase; color: #7ec8e3;
+        letter-spacing: 1px; margin-bottom: 10px;
+      }
+      .ctrl-row { display: flex; align-items: center; margin-bottom: 8px; gap: 8px; }
+      .ctrl-row label { width: 130px; font-size: 11px; color: #999; flex-shrink: 0; }
+      .ctrl-row input[type=range] { flex: 1; accent-color: #7ec8e3; cursor: pointer; }
+      .ctrl-row .val { width: 42px; text-align: right; font-size: 11px; color: #e0e0e0; }
+      #near-plane-canvas-wrap { padding: 10px 14px; border-bottom: 1px solid #333; flex-shrink: 0; }
+      #near-plane-canvas-wrap h2 {
+        font-size: 11px; text-transform: uppercase; color: #7ec8e3;
+        letter-spacing: 1px; margin-bottom: 8px;
+      }
+      #near-plane-canvas { border: 1px solid #333; border-radius: 4px; cursor: crosshair; background: #0a0a1a; display: block; }
+      #graph-wrap { flex: 1; padding: 10px 14px; display: flex; flex-direction: column; min-height: 0; }
+      #graph-wrap h2 {
+        font-size: 11px; text-transform: uppercase; color: #7ec8e3;
+        letter-spacing: 1px; margin-bottom: 4px; flex-shrink: 0;
+      }
+      #graph-subtitle { font-size: 10px; color: #555; margin-bottom: 8px; flex-shrink: 0; }
+      #graph-canvas { border: 1px solid #333; border-radius: 4px; background: #080810; flex: 1; display: block; width: 100%; min-height: 0; }
+    </style>
+  </head>
+  <body>
+    <div id="header">
+      <h1>🍩 Ray–Torus Intersection</h1>
+      <span style="color:#555;font-size:11px">drag near-plane · orbit 3D with mouse</span>
+      <div id="root-info">—</div>
+    </div>
+    <div id="main">
+      <div id="scene-container">
+        <canvas id="scene-canvas"></canvas>
+      </div>
+      <div id="right-panel">
+        <div id="controls-panel">
+          <h2>Parameters</h2>
+          <div class="ctrl-row">
+            <label>Major radius R</label>
+            <input type="range" id="ctrl-R" min="0.5" max="3.5" step="0.05" value="2">
+            <span class="val" id="val-R">2.00</span>
+          </div>
+          <div class="ctrl-row">
+            <label>Minor radius r</label>
+            <input type="range" id="ctrl-r" min="0.05" max="1.5" step="0.05" value="0.5">
+            <span class="val" id="val-r">0.50</span>
+          </div>
+          <div class="ctrl-row">
+            <label>Ray X (near plane)</label>
+            <input type="range" id="ctrl-rayX" min="-2.5" max="2.5" step="0.01" value="0">
+            <span class="val" id="val-rayX">0.00</span>
+          </div>
+          <div class="ctrl-row">
+            <label>Ray Y (near plane)</label>
+            <input type="range" id="ctrl-rayY" min="-2.5" max="2.5" step="0.01" value="0">
+            <span class="val" id="val-rayY">0.00</span>
+          </div>
+          <div class="ctrl-row">
+            <label>Torus tilt X</label>
+            <input type="range" id="ctrl-torusRot" min="-90" max="90" step="1" value="0">
+            <span class="val" id="val-torusRot">0°</span>
+          </div>
+        </div>
+
+        <div id="near-plane-canvas-wrap">
+          <h2>Near Plane <span style="color:#444;font-size:9px">(click/drag to aim ray)</span></h2>
+          <canvas id="near-plane-canvas" width="350" height="150"></canvas>
+        </div>
+
+        <div id="graph-wrap">
+          <h2>Quartic f(t)</h2>
+          <div id="graph-subtitle">f(t) = 0 ⟹ ray hits torus at parameter t</div>
+          <canvas id="graph-canvas"></canvas>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
