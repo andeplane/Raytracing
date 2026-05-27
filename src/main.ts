@@ -17,7 +17,6 @@ const params: SceneParams = {
   nearDist: 1.5,
   rayX: 0.0,
   rayY: 0.0,
-  torusRot: 0.0,   // radians; slider drives this via degree→radian conversion
 }
 
 // ── DOM ────────────────────────────────────────────────────────────────────
@@ -28,6 +27,7 @@ const rootInfo       = document.getElementById('root-info')!
 
 // ── Modules ────────────────────────────────────────────────────────────────
 const scene3d   = new Scene3D(sceneCanvas, params)
+scene3d.onGizmoChange(() => updateAll())
 const polyGraph = new PolynomialGraph(graphCanvas)
 const nearView  = new NearPlaneView(nearPlaneCanvas)
 
@@ -89,12 +89,10 @@ nearView.onChange((x, y) => {
 // ── Bind sliders ───────────────────────────────────────────────────────────
 const fix2 = (v: number) => v.toFixed(2)
 
-bindSlider('ctrl-R',        'val-R',        fix2,                 v => { params.majorR = v;                     updateAll() })
-bindSlider('ctrl-r',        'val-r',        fix2,                 v => { params.minorR = v;                     updateAll() })
-bindSlider('ctrl-rayX',     'val-rayX',     fix2,                 v => { params.rayX = v; nearView.rayX = v;    updateAll() })
-bindSlider('ctrl-rayY',     'val-rayY',     fix2,                 v => { params.rayY = v; nearView.rayY = v;    updateAll() })
-// Tilt slider is in degrees; store as radians in params
-bindSlider('ctrl-torusRot', 'val-torusRot', v => `${v.toFixed(0)}°`, v => { params.torusRot = v * Math.PI / 180; updateAll() })
+bindSlider('ctrl-R',    'val-R',    fix2, v => { params.majorR = v;                  updateAll() })
+bindSlider('ctrl-r',    'val-r',    fix2, v => { params.minorR = v;                  updateAll() })
+bindSlider('ctrl-rayX', 'val-rayX', fix2, v => { params.rayX = v; nearView.rayX = v; updateAll() })
+bindSlider('ctrl-rayY', 'val-rayY', fix2, v => { params.rayY = v; nearView.rayY = v; updateAll() })
 
 // ── Resize observer ────────────────────────────────────────────────────────
 const resizeObs = new ResizeObserver(() => updateAll())

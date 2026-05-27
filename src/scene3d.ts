@@ -9,6 +9,7 @@
  */
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+import { TransformControls } from 'three/addons/controls/TransformControls.js'
 import type { Vec3 } from './torusMath'
 
 export interface SceneParams {
@@ -18,7 +19,6 @@ export interface SceneParams {
   nearDist: number
   rayX: number
   rayY: number
-  torusRot: number
 }
 
 export class Scene3D {
@@ -35,6 +35,14 @@ export class Scene3D {
   private rayLine!: THREE.Line
   private rayArrow!: THREE.ArrowHelper
   private hitGroup!: THREE.Group
+
+  private tcTranslate!: TransformControls
+  private tcRotate!: TransformControls
+  private onGizmoChangeCallback: (() => void) | null = null
+  private _gizmoDragging = false
+  private _torusSelected = false
+  private _lastMajorR = NaN
+  private _lastMinorR = NaN
 
   private params: SceneParams
 
@@ -64,6 +72,29 @@ export class Scene3D {
     this.controls.minDistance = 2
     this.controls.maxDistance = 50
     this.controls.target.set(0, 0, 0)
+
+    // ── Transform Controls (gizmo) ────────────────────────────────
+    const makeTC = (mode: 'translate' | 'rotate') => {
+      const tc = new TransformControls(this.camera, canvas)
+      tc.setMode(mode)
+      tc.size = 0.75
+      tc.addEventListener('mouseDown', () => {
+        this._gizmoDragging = true
+        this.controls.enabled = false
+      })
+      tc.addEventListener('mouseUp', () => {
+        this.controls.enabled = true
+        // Delay so the click event that fires after mouseUp doesn't immediately deselect
+        setTimeout(() => { this._gizmoDragging = false }, 0)
+      })
+      tc.addEventListener('objectChange', () => { this.onGizmoChangeCallback?.() })
+      this.scene.add(tc.getHelper())
+      return tc
+    }
+    this.tcTranslate = makeTC('translate')
+    this.tcRotate    = makeTC('rotate')
+
+    canvas.addEventListener('click', (e) => this._handleCanvasClick(e))
 
     this.handleResize()
     window.addEventListener('resize', () => this.handleResize())
@@ -111,12 +142,13 @@ export class Scene3D {
     this.torusMesh = new THREE.Mesh(torusGeo, torusMat)
     this.torusMesh.castShadow = true
     this.torusMesh.receiveShadow = true
+    this.torusMesh.rotation.x = Math.PI / 2  // torus lies flat (axis=Y) by default
     this.scene.add(this.torusMesh)
 
     const wireGeo = new THREE.TorusGeometry(p.majorR, p.minorR, 16, 48)
     const wireMat = new THREE.MeshBasicMaterial({ color: 0x2a6a88, wireframe: true, opacity: 0.08, transparent: true })
     this.torusWire = new THREE.Mesh(wireGeo, wireMat)
-    this.scene.add(this.torusWire)
+    this.torusMesh.add(this.torusWire)  // child of torusMesh — inherits all transforms
 
     // ── Eye sphere ────────────────────────────────────────────────
     const eyeGeo = new THREE.SphereGeometry(0.14, 20, 20)
@@ -199,13 +231,17 @@ export class Scene3D {
     newFGeo.setAttribute('position', new THREE.BufferAttribute(fpts, 3))
     this.frustumLines.geometry = newFGeo
 
-    // Torus: default Three.js torus is in XY plane (axis=Z). We tilt it around X.
-    this.torusMesh.geometry.dispose()
-    this.torusMesh.geometry = new THREE.TorusGeometry(p.majorR, p.minorR, 80, 160)
-    this.torusMesh.rotation.set(p.torusRot, 0, 0)
-    this.torusWire.geometry.dispose()
-    this.torusWire.geometry = new THREE.TorusGeometry(p.majorR, p.minorR, 16, 48)
-    this.torusWire.rotation.set(p.torusRot, 0, 0)
+    // Torus geometry — only rebuild when radii change (preserves gizmo transform)
+    if (p.majorR !== this._lastMajorR || p.minorR !== this._lastMinorR) {
+      this.torusMesh.geometry.dispose()
+      this.torusMesh.geometry = new THREE.TorusGeometry(p.majorR, p.minorR, 80, 160)
+      const wire = this.torusMesh.children[0] as THREE.Mesh
+      wire.geometry.dispose()
+      wire.geometry = new THREE.TorusGeometry(p.majorR, p.minorR, 16, 48)
+      this._lastMajorR = p.majorR
+      this._lastMinorR = p.minorR
+    }
+    // torusWire transform is driven by torusMesh parent — no manual sync needed
 
     // Ray (initial: eye → far)
     const farPt = eyePos.clone().addScaledVector(rayDir, 16)
@@ -273,12 +309,12 @@ export class Scene3D {
     const hitOnNear = new THREE.Vector3(p.rayX, p.rayY, nearZ)
     const rayDir = hitOnNear.clone().sub(eyePos).normalize()
 
-    // Torus world rotation: X-axis tilt only → Euler(torusRot, 0, 0)
-    // To transform ray into torus local frame: apply inverse rotation
-    const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(p.torusRot, 0, 0, 'XYZ'))
-    const qInv = q.clone().invert()
+    // Transform ray into torus local frame using the mesh's actual world transform.
+    // Handles arbitrary position and rotation applied by the gizmo.
+    const torusPos = this.torusMesh.position
+    const qInv = this.torusMesh.quaternion.clone().invert()
 
-    const O_local = eyePos.clone().applyQuaternion(qInv)
+    const O_local = eyePos.clone().sub(torusPos).applyQuaternion(qInv)
     const D_local = rayDir.clone().applyQuaternion(qInv)
 
     return {
@@ -287,6 +323,47 @@ export class Scene3D {
       O_v: { x: O_local.x, y: O_local.y, z: O_local.z },
       D_v: { x: D_local.x, y: D_local.y, z: D_local.z },
     }
+  }
+
+  /** Register a callback that fires whenever the gizmo transforms the torus. */
+  onGizmoChange(cb: () => void): void {
+    this.onGizmoChangeCallback = cb
+  }
+
+  private _handleCanvasClick(e: MouseEvent) {
+    if (this._gizmoDragging) return  // drag ended with a click — don't deselect
+
+    const rect = this.renderer.domElement.getBoundingClientRect()
+    const ndc = new THREE.Vector2(
+      ((e.clientX - rect.left) / rect.width)  * 2 - 1,
+      -((e.clientY - rect.top) / rect.height) * 2 + 1,
+    )
+    const ray = new THREE.Raycaster()
+    ray.setFromCamera(ndc, this.camera)
+
+    // recursive=false so we don't hit the wireframe child
+    const hits = ray.intersectObject(this.torusMesh, false)
+    if (hits.length > 0) {
+      this._selectTorus()
+    } else {
+      this._deselectTorus()
+    }
+  }
+
+  private _selectTorus() {
+    if (this._torusSelected) return
+    this._torusSelected = true
+    this.tcTranslate.attach(this.torusMesh)
+    this.tcRotate.attach(this.torusMesh)
+    ;(this.torusMesh.material as THREE.MeshStandardMaterial).emissive.setHex(0x2a6a7a)
+  }
+
+  private _deselectTorus() {
+    if (!this._torusSelected) return
+    this._torusSelected = false
+    this.tcTranslate.detach()
+    this.tcRotate.detach()
+    ;(this.torusMesh.material as THREE.MeshStandardMaterial).emissive.setHex(0x1a4a5a)
   }
 
   update(params: Partial<SceneParams>) {
