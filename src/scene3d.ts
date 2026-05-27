@@ -425,6 +425,9 @@ export class Scene3D {
     this.syncScene()
   }
 
+  /** Force a resize — call this when the canvas's parent panel becomes visible. */
+  resize() { this.handleResize() }
+
   private handleResize() {
     const el = this.renderer.domElement
     const container = el.parentElement!

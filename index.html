@@ -333,9 +333,97 @@
       /* root-info and the Intuition-only hint are hidden unless Intuition is active */
       body:not([data-active-tab="intuition"]) #root-info     { visibility: hidden; }
       body:not([data-active-tab="intuition"]) #intuition-hint { visibility: hidden; }
+
+      /* ── Welcome modal ── */
+      #welcome-overlay {
+        position: fixed; inset: 0; z-index: 1000;
+        background: rgba(5, 5, 18, 0.88);
+        display: flex; align-items: center; justify-content: center;
+        backdrop-filter: blur(4px);
+      }
+      #welcome-overlay.hidden { display: none; }
+      #welcome-box {
+        background: #0d0d1f;
+        border: 1px solid #2a3a5a;
+        border-radius: 8px;
+        padding: 32px 36px 28px;
+        max-width: 520px;
+        width: 90%;
+        color: #c0d8e8;
+        font-family: 'Courier New', monospace;
+      }
+      #welcome-box h1 {
+        font-size: 14px; text-transform: uppercase; letter-spacing: 3px;
+        color: #7ec8e3; margin-bottom: 6px;
+      }
+      #welcome-box .welcome-sub {
+        font-size: 10px; text-transform: uppercase; letter-spacing: 2px;
+        color: #334466; margin-bottom: 22px;
+      }
+      #welcome-box p {
+        font-size: 12px; line-height: 1.85; color: #88a0b8; margin-bottom: 14px;
+      }
+      #welcome-box p strong { color: #a8c8e0; }
+      #welcome-tabs {
+        display: flex; gap: 12px; margin-bottom: 24px;
+      }
+      .welcome-tab-card {
+        flex: 1; background: #080816;
+        border: 1px solid #1a2540; border-radius: 5px;
+        padding: 12px 10px; text-align: center;
+      }
+      .welcome-tab-card .wtc-icon { font-size: 18px; margin-bottom: 6px; }
+      .welcome-tab-card .wtc-name { font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: #7ec8e3; margin-bottom: 4px; }
+      .welcome-tab-card .wtc-desc { font-size: 10px; color: #445566; line-height: 1.6; }
+      #welcome-close {
+        display: block; width: 100%;
+        padding: 9px 0;
+        background: #0d1f2d; color: #4ecca3;
+        border: 1px solid #2a5a3a; border-radius: 4px;
+        cursor: pointer; font: 11px/1.6 'Courier New', monospace;
+        letter-spacing: 1px; text-transform: uppercase;
+        transition: background 0.15s, border-color 0.15s;
+      }
+      #welcome-close:hover { background: #122212; border-color: #4ecca3; }
     </style>
   </head>
   <body data-active-tab="theory">
+
+    <!-- ── Welcome modal ── -->
+    <div id="welcome-overlay">
+      <div id="welcome-box">
+        <h1>Ray–Surface Intersection</h1>
+        <div class="welcome-sub">An interactive geometry primer</div>
+        <p>
+          A <strong>ray tracer</strong> renders images by casting rays from a camera through
+          every pixel and finding where each ray hits a surface. This tool explores the
+          core mathematical question: <em>how do you compute that intersection?</em>
+        </p>
+        <p>
+          Choose a geometry — <strong>sphere</strong>, <strong>cylinder</strong>, or
+          <strong>torus</strong> — and explore it across three lenses:
+        </p>
+        <div id="welcome-tabs">
+          <div class="welcome-tab-card">
+            <div class="wtc-icon">📐</div>
+            <div class="wtc-name">Theory</div>
+            <div class="wtc-desc">Derive the intersection polynomial step by step</div>
+          </div>
+          <div class="welcome-tab-card">
+            <div class="wtc-icon">🎮</div>
+            <div class="wtc-name">Intuition</div>
+            <div class="wtc-desc">Aim a ray interactively and watch the roots move</div>
+          </div>
+          <div class="welcome-tab-card">
+            <div class="wtc-icon">💻</div>
+            <div class="wtc-name">Code</div>
+            <div class="wtc-desc">Edit live GLSL — see the shader render in real time</div>
+          </div>
+        </div>
+        <button id="welcome-close">Start exploring →</button>
+      </div>
+    </div>
+
     <div id="header">
       <h1 id="scene-title">🔵 Ray–Sphere Intersection</h1>
       <select id="geometry-select">

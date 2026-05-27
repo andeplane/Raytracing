@@ -187,6 +187,12 @@ function setActiveTab(target: string) {
   // CSS-driven header visibility — no JS flash (CSS reads data-active-tab immediately)
   document.body.dataset.activeTab = target
 
+  // Intuition canvas is 0×0 when initialised while the panel is hidden.
+  // Force a resize after the panel is laid out so Three.js fills the space.
+  if (target === 'intuition') {
+    requestAnimationFrame(() => scene3d.resize())
+  }
+
   // Lazy-init tabs on first visit
   if (target === 'theory' && !theoryView) {
     theoryView = new TheoryView(document.getElementById('tab-theory')!)
@@ -203,3 +209,9 @@ document.querySelectorAll<HTMLButtonElement>('.tab-btn').forEach(btn => {
 
 // Open on Theory by default
 setActiveTab('theory')
+
+// ── Welcome modal ───────────────────────────────────────────────────────────
+const overlay = document.getElementById('welcome-overlay')!
+const dismiss = () => overlay.classList.add('hidden')
+document.getElementById('welcome-close')!.addEventListener('click', dismiss)
+overlay.addEventListener('click', (e) => { if (e.target === overlay) dismiss() })

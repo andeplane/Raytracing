@@ -351,15 +351,42 @@ export class CodeView {
     this.vao = gl.createVertexArray()!;
     gl.bindVertexArray(this.vao);
 
-    // ── Mouse ────────────────────────────────────────────────────────────
-    this.canvas.addEventListener('mousemove', (e) => {
-      const r = this.canvas.getBoundingClientRect();
-      const dpr = window.devicePixelRatio ?? 1;
-      this.mouse[0] = (e.clientX - r.left)  * dpr;
-      this.mouse[1] = this.canvas.height - (e.clientY - r.top) * dpr;
+    // ── Mouse — delta-based orbit (no absolute-position jump, correct Y) ──
+    // accX / accY are normalised angles [0,1] fed as iMouse.xy / iResolution.xy
+    // Initial accY = 0.8/π so the shader's (-m.y*π + 0.8) starts at 0 → identity rotation.
+    let dragging = false;
+    let lastDragX = 0, lastDragY = 0;
+    let accX = 0.0;
+    let accY = 0.8 / Math.PI;   // ~0.255 → rotation identity on first drag
+
+    const syncMouse = () => {
+      this.mouse[0] = accX * this.canvas.width;
+      this.mouse[1] = accY * this.canvas.height;
+    };
+    syncMouse();
+
+    this.canvas.addEventListener('mousedown', (e) => {
+      dragging = true;
+      lastDragX = e.clientX;
+      lastDragY = e.clientY;
+      this.mouse[2] = 1;
+      // Do NOT update mouse[0/1] here — prevents position jump on click
     });
-    this.canvas.addEventListener('mousedown', () => { this.mouse[2] = 1; });
-    this.canvas.addEventListener('mouseup',   () => { this.mouse[2] = 0; });
+    window.addEventListener('mousemove', (e) => {
+      if (!dragging) return;
+      const r = this.canvas.getBoundingClientRect();
+      const dx =  (e.clientX - lastDragX) / r.width;
+      const dy =  (e.clientY - lastDragY) / r.height;  // positive = drag down
+      lastDragX = e.clientX;
+      lastDragY = e.clientY;
+      accX = ((accX + dx) % 1.0 + 1.0) % 1.0;        // wrap horizontal
+      accY = Math.max(0.01, Math.min(0.99, accY + dy)); // drag down → lower camera (looks up)
+      syncMouse();
+    });
+    window.addEventListener('mouseup', () => {
+      dragging = false;
+      this.mouse[2] = 0;
+    });
 
     // ── Run button ───────────────────────────────────────────────────────
     container.querySelector('#glsl-run-btn')!.addEventListener('click', () => {
